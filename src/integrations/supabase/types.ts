@@ -14,6 +14,72 @@ export type Database = {
   }
   public: {
     Tables: {
+      appointments: {
+        Row: {
+          barber_id: string
+          client_name: string
+          client_phone: string
+          created_at: string
+          ends_at: string
+          id: string
+          notes: string | null
+          payment_method: Database["public"]["Enums"]["payment_method"] | null
+          price_cents: number
+          service_id: string
+          starts_at: string
+          status: Database["public"]["Enums"]["appointment_status"]
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          barber_id: string
+          client_name: string
+          client_phone: string
+          created_at?: string
+          ends_at: string
+          id?: string
+          notes?: string | null
+          payment_method?: Database["public"]["Enums"]["payment_method"] | null
+          price_cents?: number
+          service_id: string
+          starts_at: string
+          status?: Database["public"]["Enums"]["appointment_status"]
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          barber_id?: string
+          client_name?: string
+          client_phone?: string
+          created_at?: string
+          ends_at?: string
+          id?: string
+          notes?: string | null
+          payment_method?: Database["public"]["Enums"]["payment_method"] | null
+          price_cents?: number
+          service_id?: string
+          starts_at?: string
+          status?: Database["public"]["Enums"]["appointment_status"]
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointments_barber_id_fkey"
+            columns: ["barber_id"]
+            isOneToOne: false
+            referencedRelation: "barbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       barbers: {
         Row: {
           active: boolean
@@ -53,6 +119,41 @@ export type Database = {
         }
         Relationships: []
       }
+      blocked_slots: {
+        Row: {
+          barber_id: string
+          created_at: string
+          ends_at: string
+          id: string
+          reason: string | null
+          starts_at: string
+        }
+        Insert: {
+          barber_id: string
+          created_at?: string
+          ends_at: string
+          id?: string
+          reason?: string | null
+          starts_at: string
+        }
+        Update: {
+          barber_id?: string
+          created_at?: string
+          ends_at?: string
+          id?: string
+          reason?: string | null
+          starts_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blocked_slots_barber_id_fkey"
+            columns: ["barber_id"]
+            isOneToOne: false
+            referencedRelation: "barbers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       business_hours: {
         Row: {
           close_time: string
@@ -71,6 +172,83 @@ export type Database = {
           closed?: boolean
           open_time?: string
           weekday?: number
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          barber_id: string | null
+          body: string | null
+          created_at: string
+          id: string
+          read: boolean
+          title: string
+          type: string
+        }
+        Insert: {
+          barber_id?: string | null
+          body?: string | null
+          created_at?: string
+          id?: string
+          read?: boolean
+          title: string
+          type: string
+        }
+        Update: {
+          barber_id?: string | null
+          body?: string | null
+          created_at?: string
+          id?: string
+          read?: boolean
+          title?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_barber_id_fkey"
+            columns: ["barber_id"]
+            isOneToOne: false
+            referencedRelation: "barbers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          active: boolean
+          category: string
+          cost_cents: number
+          created_at: string
+          id: string
+          min_quantity: number
+          name: string
+          price_cents: number
+          quantity: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          category?: string
+          cost_cents?: number
+          created_at?: string
+          id?: string
+          min_quantity?: number
+          name: string
+          price_cents?: number
+          quantity?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          category?: string
+          cost_cents?: number
+          created_at?: string
+          id?: string
+          min_quantity?: number
+          name?: string
+          price_cents?: number
+          quantity?: number
+          updated_at?: string
         }
         Relationships: []
       }
@@ -175,6 +353,44 @@ export type Database = {
           whatsapp_template?: string | null
         }
         Relationships: []
+      }
+      stock_movements: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          note: string | null
+          product_id: string
+          quantity: number
+          type: Database["public"]["Enums"]["stock_movement_type"]
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          product_id: string
+          quantity: number
+          type: Database["public"]["Enums"]["stock_movement_type"]
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          product_id?: string
+          quantity?: number
+          type?: Database["public"]["Enums"]["stock_movement_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_movements_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
