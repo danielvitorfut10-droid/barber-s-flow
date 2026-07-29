@@ -54,7 +54,7 @@ export function SiteFooter() {
             {(site?.hours ?? []).map((h) => (
               <li key={h.weekday} className="flex justify-between gap-4">
                 <span className="text-muted-foreground">{WEEKDAYS[h.weekday]}</span>
-                <span>{h.closed ? "Fechado" : `${h.opens_at.slice(0, 5)} – ${h.closes_at.slice(0, 5)}`}</span>
+                <span>{h.closed ? "Fechado" : `${h.open_time.slice(0, 5)} – ${h.close_time.slice(0, 5)}`}</span>
               </li>
             ))}
           </ul>
