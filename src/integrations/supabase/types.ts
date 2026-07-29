@@ -14,16 +14,213 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      barbers: {
+        Row: {
+          active: boolean
+          bio: string | null
+          created_at: string
+          id: string
+          name: string
+          nickname: string | null
+          photo_url: string | null
+          sort_order: number
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          active?: boolean
+          bio?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          nickname?: string | null
+          photo_url?: string | null
+          sort_order?: number
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          active?: boolean
+          bio?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          nickname?: string | null
+          photo_url?: string | null
+          sort_order?: number
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      business_hours: {
+        Row: {
+          close_time: string
+          closed: boolean
+          open_time: string
+          weekday: number
+        }
+        Insert: {
+          close_time?: string
+          closed?: boolean
+          open_time?: string
+          weekday: number
+        }
+        Update: {
+          close_time?: string
+          closed?: boolean
+          open_time?: string
+          weekday?: number
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          full_name: string | null
+          id: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          full_name?: string | null
+          id: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      services: {
+        Row: {
+          active: boolean
+          created_at: string
+          description: string | null
+          duration_min: number
+          id: string
+          name: string
+          price_cents: number
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          duration_min?: number
+          id?: string
+          name: string
+          price_cents?: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          duration_min?: number
+          id?: string
+          name?: string
+          price_cents?: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      settings: {
+        Row: {
+          address: string | null
+          id: number
+          instagram: string | null
+          logo_url: string | null
+          maps_url: string | null
+          phone: string | null
+          shop_name: string
+          slot_interval_min: number
+          updated_at: string
+          whatsapp: string | null
+          whatsapp_template: string | null
+        }
+        Insert: {
+          address?: string | null
+          id?: number
+          instagram?: string | null
+          logo_url?: string | null
+          maps_url?: string | null
+          phone?: string | null
+          shop_name?: string
+          slot_interval_min?: number
+          updated_at?: string
+          whatsapp?: string | null
+          whatsapp_template?: string | null
+        }
+        Update: {
+          address?: string | null
+          id?: number
+          instagram?: string | null
+          logo_url?: string | null
+          maps_url?: string | null
+          phone?: string | null
+          shop_name?: string
+          slot_interval_min?: number
+          updated_at?: string
+          whatsapp?: string | null
+          whatsapp_template?: string | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      current_barber_id: { Args: never; Returns: string }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "barber" | "client"
+      appointment_status:
+        | "agendado"
+        | "confirmado"
+        | "concluido"
+        | "cancelado"
+        | "nao_compareceu"
+      payment_method: "dinheiro" | "pix" | "debito" | "credito"
+      stock_movement_type: "entrada" | "saida"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +347,17 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "barber", "client"],
+      appointment_status: [
+        "agendado",
+        "confirmado",
+        "concluido",
+        "cancelado",
+        "nao_compareceu",
+      ],
+      payment_method: ["dinheiro", "pix", "debito", "credito"],
+      stock_movement_type: ["entrada", "saida"],
+    },
   },
 } as const
