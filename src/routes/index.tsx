@@ -16,10 +16,10 @@ export const Route = createFileRoute("/")({
         content:
           "Agende seu corte na Studio Blackout em segundos. Barbeiros especialistas, ambiente reservado e horários confirmados na hora pelo WhatsApp.",
       },
-      { property: "og:title", content: "Studio Blackout — Barbearia premium" },
+      { property: "og:title", content: "Studio Blackout — Barbearia premium com agendamento online" },
       {
         property: "og:description",
-        content: "Corte preciso, ambiente reservado e agendamento online sem cadastro.",
+        content: "Agende seu corte na Studio Blackout em segundos. Barbeiros especialistas, ambiente reservado e horários confirmados na hora pelo WhatsApp.",
       },
     ],
   }),
