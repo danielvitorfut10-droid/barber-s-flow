@@ -31,7 +31,7 @@ export function SiteHeader() {
       className={cn(
         "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
         scrolled || open
-          ? "bg-background/90 backdrop-blur-md border-b border-border/60 shadow-md py-2"
+          ? "bg-black/95 backdrop-blur-md border-b border-zinc-800/80 shadow-md py-2"
           : "bg-transparent border-b border-transparent py-2.5"
       )}
     >
