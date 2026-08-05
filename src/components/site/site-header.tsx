@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,12 +15,33 @@ const LINKS = [
 export function SiteHeader() {
   const { openBooking } = useBooking();
   const [open, setOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 20);
+    };
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur">
-      <div className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-4">
-        <Link to="/" className="min-w-0 font-display text-sm font-extrabold uppercase tracking-[0.3em]">
-          Studio <span className="text-muted-foreground">Blackout</span>
+    <header
+      className={cn(
+        "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
+        scrolled || open
+          ? "bg-background/90 backdrop-blur-md border-b border-border/60 shadow-md py-2"
+          : "bg-transparent border-b border-transparent py-2.5"
+      )}
+    >
+      <div className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4">
+        <Link to="/" className="flex items-center">
+          <img
+            src="/logo-black.png"
+            alt="Studio Blackout"
+            className="h-12 w-auto max-h-16 object-contain transition-all duration-300 sm:h-14 md:h-16 my-[-6px]"
+          />
         </Link>
 
         <div className="flex shrink-0 items-center gap-2">
@@ -30,7 +51,7 @@ export function SiteHeader() {
                 key={l.to}
                 to={l.to}
                 className="rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
-                activeProps={{ className: "text-foreground" }}
+                activeProps={{ className: "text-foreground font-medium" }}
                 activeOptions={{ exact: l.to === "/" }}
               >
                 {l.label}
@@ -52,7 +73,7 @@ export function SiteHeader() {
         </div>
       </div>
 
-      <div className={cn("border-t border-border/60 md:hidden", open ? "block" : "hidden")}>
+      <div className={cn("border-t border-border/60 md:hidden bg-background/95 backdrop-blur-md", open ? "block" : "hidden")}>
         <nav className="mx-auto flex max-w-6xl flex-col p-3">
           {LINKS.map((l) => (
             <Link
@@ -60,7 +81,7 @@ export function SiteHeader() {
               to={l.to}
               onClick={() => setOpen(false)}
               className="rounded-md px-3 py-2.5 text-sm text-muted-foreground hover:text-foreground"
-              activeProps={{ className: "text-foreground" }}
+              activeProps={{ className: "text-foreground font-medium" }}
               activeOptions={{ exact: l.to === "/" }}
             >
               {l.label}
@@ -80,3 +101,4 @@ export function SiteHeader() {
     </header>
   );
 }
+

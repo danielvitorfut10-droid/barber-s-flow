@@ -33,27 +33,26 @@ function Home() {
 
   return (
     <div>
-      <section className="relative isolate overflow-hidden">
-        <img
-          src={heroImg}
-          alt="Interior da barbearia Studio Blackout com iluminação baixa"
-          className="absolute inset-0 h-full w-full object-cover opacity-40"
-          loading="eager"
+      <section className="relative isolate overflow-hidden min-h-[80vh] flex items-center justify-center">
+        {/* Fundo Mobile - Efeito fixo/parado */}
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat bg-fixed opacity-85 md:hidden bg-[url('/fundo-mobile.jpg')]"
+          aria-hidden="true"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-background/60 via-background/80 to-background" />
-        <div className="relative mx-auto max-w-6xl px-4 py-28 md:py-40">
-          <p className="font-display text-xs uppercase tracking-[0.4em] text-muted-foreground">
-            Barbearia · Campinas
-          </p>
-          <h1 className="mt-5 max-w-3xl font-display text-4xl font-extrabold leading-[1.05] tracking-tight md:text-6xl">
+        {/* Fundo Desktop - Efeito fixo/parado */}
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat bg-fixed opacity-85 hidden md:block bg-[url('/fundo-hero.jpeg')]"
+          aria-hidden="true"
+        />
+        {/* Sobreposição suave para dar legibilidade ao texto sem escurecer demais a imagem */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/25 to-background/95" />
+
+        <div className="relative mx-auto flex max-w-4xl flex-col items-center text-center px-4 py-32 md:py-44 z-10">
+          <h1 className="max-w-3xl font-display text-4xl font-extrabold leading-[1.08] tracking-tight md:text-6xl text-white drop-shadow-md">
             Seu corte no horário exato. Sem fila, sem cadastro.
           </h1>
-          <p className="mt-5 max-w-xl text-base text-muted-foreground">
-            Escolha o barbeiro, o serviço e o horário. A confirmação chega no seu WhatsApp em
-            segundos.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Button size="lg" onClick={openBooking}>
+          <div className="mt-8 flex justify-center">
+            <Button size="lg" onClick={openBooking} className="px-8 py-6 text-base font-semibold shadow-lg">
               Agendar agora
             </Button>
           </div>
