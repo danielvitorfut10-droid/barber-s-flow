@@ -37,9 +37,14 @@ function Home() {
     <div>
       {/* SEÇÃO HERO */}
       <section className="relative isolate overflow-hidden min-h-[85vh] md:min-h-screen flex items-center justify-center">
-        {/* Fundo Hero com imagem bem nítida e efeito fixo */}
+        {/* Fundo DESKTOP: parallax fixo com FUNDO-NEGUIN */}
         <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat bg-fixed opacity-100 bg-[url('/FUNDO-NEGUIN.jpg')]"
+          className="absolute inset-0 hidden md:block bg-cover bg-center bg-no-repeat bg-fixed bg-[url('/FUNDO-NEGUIN.jpg')]"
+          aria-hidden="true"
+        />
+        {/* Fundo MOBILE: imagem fundo-mobile com bg-scroll (bg-fixed quebra no mobile) */}
+        <div
+          className="absolute inset-0 block md:hidden bg-cover bg-center bg-no-repeat bg-scroll bg-[url('/fundo-mobile.jpg')]"
           aria-hidden="true"
         />
         {/* Sobreposição suave para dar máximo destaque à imagem preservando a legibilidade */}
@@ -80,33 +85,6 @@ function Home() {
             </p>
           </div>
 
-          {/* Endereço e Botão de Agendamento */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
-            {site?.settings?.address && (
-              <a
-                href={
-                  site.settings.maps_url ||
-                  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                    `${site.settings.address}, Campinas - SP`
-                  )}`
-                }
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm font-medium text-zinc-800 hover:text-black hover:underline transition-colors group cursor-pointer"
-                title="Ver no Google Maps"
-              >
-                <MapPin className="h-4 w-4 shrink-0 text-red-600 transition-transform group-hover:scale-110" aria-hidden />
-                <span>{site.settings.address}</span>
-              </a>
-            )}
-            <Button
-              size="lg"
-              onClick={openBooking}
-              className="bg-black text-white hover:bg-zinc-800 transition-all font-semibold shadow-md px-6 py-3"
-            >
-              Reservar meu horário
-            </Button>
-          </div>
 
           {/* Layout de 2 Imagens Desfasadas (Posicionamento igual à foto 2) */}
           <div className="relative mx-auto w-full max-w-2xl h-[420px] sm:h-[550px] mt-6">
@@ -157,8 +135,7 @@ function Home() {
               return (
                 <div
                   key={s.id}
-                  onClick={openBooking}
-                  className="group relative flex flex-col items-center text-center p-8 rounded-2xl bg-zinc-950/90 border border-zinc-800/80 hover:border-amber-500/50 hover:bg-zinc-900/80 transition-all duration-300 cursor-pointer shadow-xl"
+                  className="group relative flex flex-col items-center text-center p-8 rounded-2xl bg-zinc-950/90 border border-zinc-800/80 hover:border-[#39ff14]/40 hover:bg-zinc-900/80 transition-all duration-300 shadow-xl"
                 >
                   {/* Ícone */}
                   <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-zinc-900 border border-zinc-800 text-white group-hover:scale-110 group-hover:bg-[#39ff14] group-hover:text-black transition-all duration-300">
@@ -291,17 +268,31 @@ function ServiceIcon({ type }: { type: string }) {
       </svg>
     );
   }
-  // Corte de cabelo: silhueta pompadour (imagem 1)
+  // Corte de cabelo: silhueta pompadour fiel à imagem de referência
   return (
-    <svg className="w-9 h-9 fill-current" viewBox="0 0 100 80">
-      {/* cabelo topo - volume pompadour */}
-      <path d="M15 45 Q10 20 30 10 Q50 2 70 10 Q90 20 85 45 Q75 38 65 40 Q50 35 35 40 Q25 38 15 45 Z" />
-      {/* lateral esquerda */}
-      <path d="M15 45 Q10 55 12 68 Q20 65 25 58 Q20 52 15 45 Z" />
-      {/* lateral direita */}
-      <path d="M85 45 Q90 55 88 68 Q80 65 75 58 Q80 52 85 45 Z" />
-      {/* topo da cabeça */}
-      <ellipse cx="50" cy="60" rx="38" ry="14" />
+    <svg className="w-9 h-9 fill-current" viewBox="0 0 64 56">
+      <path d="
+        M8 42
+        C6 36 5 28 7 22
+        C8 16 10 10 16 7
+        C13 12 12 18 14 22
+        C16 14 20 9 27 6
+        C22 12 21 18 23 23
+        C26 13 32 8 40 7
+        C36 13 35 19 37 24
+        C40 16 46 12 52 13
+        C48 18 47 24 49 28
+        C52 22 56 21 58 24
+        C57 28 55 33 53 37
+        C56 36 58 38 57 41
+        C54 44 50 44 47 43
+        C44 46 40 48 34 48
+        C26 49 18 47 14 44
+        C12 46 9 46 8 42
+        Z
+      "/>
+      {/* Sombra lateral esquerda destacada */}
+      <path d="M8 42 C5 44 4 50 6 54 C9 52 11 48 14 44 C11 44 9 43 8 42 Z"/>
     </svg>
   );
 }
