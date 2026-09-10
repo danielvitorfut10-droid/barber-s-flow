@@ -83,11 +83,18 @@ export const getAvailability = createServerFn({ method: "POST" })
         .lt("starts_at", range.end),
       supabaseAdmin
         .from("blocked_slots")
-        .select("starts_at, ends_at")
+        .select("starts_at, ends_at, reason")
         .eq("barber_id", data.barberId)
         .lt("starts_at", range.end)
         .gt("ends_at", range.start),
     ]);
+
+    const allBlocks = blocks.data ?? [];
+    const unblockedNightStarts = allBlocks
+      .filter((b) => b.reason === "desbloqueado")
+      .map((b) => new Date(b.starts_at).getTime());
+
+    const actualBlocks = allBlocks.filter((b) => b.reason !== "desbloqueado");
 
     const slots = buildSlots({
       dateStr: data.date,
@@ -95,7 +102,8 @@ export const getAvailability = createServerFn({ method: "POST" })
       closeTime: String(hour.close_time).slice(0, 5),
       intervalMin: settings?.slot_interval_min ?? 30,
       durationMin: service.duration_min,
-      busy: toIntervals([...(appointments.data ?? []), ...(blocks.data ?? [])]),
+      busy: toIntervals([...(appointments.data ?? []), ...actualBlocks]),
+      unblockedNightStarts,
     });
 
     return { slots };

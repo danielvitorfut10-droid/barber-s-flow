@@ -29,14 +29,16 @@ export function buildSlots(params: {
   intervalMin: number;
   durationMin: number;
   busy: Interval[];
+  unblockedNightStarts?: number[];
   now?: Date;
 }): Slot[] {
-  const { dateStr, openTime, closeTime, intervalMin, durationMin, busy } = params;
+  const { dateStr, openTime, intervalMin, durationMin, busy, unblockedNightStarts = [] } = params;
   const now = params.now ?? new Date();
   const minStart = now.getTime() + 30 * 60 * 1000;
 
   const open = minutesOf(openTime);
-  const close = minutesOf(closeTime);
+  // Extend closing time to 23:59 to allow slots up to 00:00 (midnight)
+  const close = Math.max(minutesOf(params.closeTime), 23 * 60 + 59);
   const slots: Slot[] = [];
 
   for (let m = open; m + durationMin <= close; m += intervalMin) {
@@ -45,6 +47,13 @@ export function buildSlots(params: {
     const start = new Date(iso).getTime();
     const end = start + durationMin * 60 * 1000;
     if (start < minStart) continue;
+
+    // From 19:00 onwards (1140 min), slots are blocked by default unless explicitly unblocked
+    if (m >= 1140) {
+      const isUnblocked = unblockedNightStarts.some((t) => Math.abs(t - start) < 60000);
+      if (!isUnblocked) continue;
+    }
+
     const conflict = busy.some((b) => start < b.end && end > b.start);
     if (!conflict) slots.push({ time, iso });
   }
