@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { ptBR } from "date-fns/locale";
 import {
   ArrowLeft,
   CalendarDays,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,25 +66,24 @@ export function BookingModal({ open, onOpenChange }: Props) {
     }
   }, [open]);
 
-  const days = useMemo(() => {
-    const closedWeekdays = new Set(
-      (site?.hours ?? []).filter((h) => h.closed).map((h) => h.weekday),
-    );
-    const list: { key: string; label: string; weekday: number; disabled: boolean }[] = [];
-    for (let i = 0; i < 21; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() + i);
-      const key = toDateKey(d);
-      const weekday = d.getDay();
-      list.push({
-        key,
-        weekday,
-        label: new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(d),
-        disabled: closedWeekdays.has(weekday),
-      });
-    }
-    return list;
-  }, [site]);
+  const closedWeekdays = useMemo(
+    () => new Set((site?.hours ?? []).filter((h) => h.closed).map((h) => h.weekday)),
+    [site],
+  );
+
+  const isDateDisabled = (d: Date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (d < today) return true;
+
+    const maxDate = new Date();
+    maxDate.setDate(today.getDate() + 30);
+    if (d > maxDate) return true;
+
+    const weekday = d.getDay();
+    return closedWeekdays.has(weekday);
+  };
 
   const slotsQuery = useQuery({
     queryKey: ["availability", barberId, serviceId, date],
@@ -143,12 +144,12 @@ export function BookingModal({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] gap-0 overflow-y-auto border-border bg-popover p-0 sm:max-w-lg">
-        <div className="border-b border-border p-5">
-          <DialogTitle className="font-display text-lg">
+      <DialogContent className="flex flex-col h-[490px] sm:h-[530px] max-h-[85vh] w-[calc(100vw-2rem)] max-w-md sm:max-w-lg gap-0 overflow-hidden border-border bg-popover p-0 rounded-2xl shadow-2xl">
+        <div className="shrink-0 border-b border-border p-4 sm:p-5 bg-card/40">
+          <DialogTitle className="font-display text-base sm:text-lg">
             {done ? "Agendamento confirmado" : "Agendar agora"}
           </DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">
+          <DialogDescription className="text-xs text-muted-foreground mt-0.5">
             {done
               ? "Seu horário já está reservado na agenda."
               : `Etapa ${step + 1} de ${STEPS.length} — ${STEPS[step]}`}
@@ -156,34 +157,34 @@ export function BookingModal({ open, onOpenChange }: Props) {
           {!done && (
             <Progress
               value={((step + 1) / STEPS.length) * 100}
-              className="mt-4 h-1 bg-secondary"
+              className="mt-3 h-1.5 bg-secondary"
               aria-label="Progresso do agendamento"
             />
           )}
         </div>
 
-        <div className="p-5">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-5 space-y-4">
           {done ? (
-            <div className="space-y-5 text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-secondary">
+            <div className="space-y-5 text-center py-4">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-secondary text-primary">
                 <Check className="h-7 w-7" aria-hidden />
               </div>
               <div className="space-y-1">
-                <p className="font-display text-base">
+                <p className="font-display text-base font-medium">
                   {service?.name} com {barber?.name}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {date && formatDateLong(date)} às {time}
                 </p>
               </div>
-              <div className="flex flex-col gap-2">
-                <Button asChild size="lg">
+              <div className="flex flex-col gap-2 pt-2">
+                <Button asChild size="lg" className="w-full">
                   <a href={done.whatsappUrl} target="_blank" rel="noreferrer">
                     <MessageCircle className="mr-2 h-4 w-4" aria-hidden />
                     Enviar confirmação no WhatsApp
                   </a>
                 </Button>
-                <Button variant="ghost" onClick={() => onOpenChange(false)}>
+                <Button variant="ghost" onClick={() => onOpenChange(false)} className="w-full">
                   Fechar
                 </Button>
               </div>
@@ -191,9 +192,9 @@ export function BookingModal({ open, onOpenChange }: Props) {
           ) : (
             <>
               {step === 0 && (
-                <div className="grid gap-3">
+                <div className="flex flex-col gap-3">
                   {!site
-                    ? [0, 1].map((i) => <Skeleton key={i} className="h-20 w-full" />)
+                    ? [0, 1].map((i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)
                     : site.barbers.map((b) => (
                         <button
                           key={b.id}
@@ -203,26 +204,33 @@ export function BookingModal({ open, onOpenChange }: Props) {
                             setStep(1);
                           }}
                           className={cn(
-                            "flex items-center gap-4 rounded-xl border border-border bg-card p-4 text-left transition-all hover:border-foreground/40 hover:bg-accent",
-                            barberId === b.id && "border-foreground",
+                            "flex items-center gap-3 sm:gap-4 rounded-xl border border-border bg-card p-3.5 sm:p-4 text-left transition-all hover:border-foreground/40 hover:bg-accent/60 w-full min-w-0",
+                            barberId === b.id && "border-foreground bg-accent/80 ring-1 ring-foreground",
                           )}
                         >
-                          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-secondary font-display text-lg">
+                          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-secondary font-display text-lg font-bold">
                             {b.name.charAt(0)}
                           </span>
-                          <span className="min-w-0">
-                            <span className="block font-display text-sm">{b.name}</span>
-                            <span className="block truncate text-xs text-muted-foreground">
+                          <span className="flex-1 min-w-0 overflow-hidden">
+                            <span className="block font-display text-sm sm:text-base font-semibold text-foreground truncate">
+                              {b.name}
+                            </span>
+                            <span className="block text-xs text-muted-foreground leading-relaxed whitespace-normal break-words line-clamp-2 mt-0.5">
                               {b.bio}
                             </span>
                           </span>
+                          {barberId === b.id && (
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
+                              <Check className="h-3.5 w-3.5" />
+                            </span>
+                          )}
                         </button>
                       ))}
                 </div>
               )}
 
               {step === 1 && (
-                <div className="grid gap-2">
+                <div className="flex flex-col gap-2.5">
                   {(site?.services ?? []).map((s) => (
                     <button
                       key={s.id}
@@ -233,48 +241,54 @@ export function BookingModal({ open, onOpenChange }: Props) {
                         setStep(2);
                       }}
                       className={cn(
-                        "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-all hover:border-foreground/40 hover:bg-accent",
-                        serviceId === s.id && "border-foreground",
+                        "flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3.5 sm:p-4 text-left transition-all hover:border-foreground/40 hover:bg-accent/60 w-full min-w-0",
+                        serviceId === s.id && "border-foreground bg-accent/80 ring-1 ring-foreground",
                       )}
                     >
-                      <span className="min-w-0">
-                        <span className="block truncate font-display text-sm">{s.name}</span>
-                        <span className="block text-xs text-muted-foreground">
+                      <div className="flex-1 min-w-0">
+                        <span className="block font-display text-sm sm:text-base font-medium text-foreground truncate">
+                          {s.name}
+                        </span>
+                        <span className="block text-xs text-muted-foreground mt-0.5">
                           {formatDuration(s.duration_min)}
                         </span>
-                      </span>
-                      <span className="shrink-0 font-display text-sm">
-                        {formatBRL(s.price_cents)}
-                      </span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-display text-sm sm:text-base font-semibold text-foreground">
+                          {formatBRL(s.price_cents)}
+                        </span>
+                        {serviceId === s.id && (
+                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-foreground text-background">
+                            <Check className="h-3 w-3" />
+                          </span>
+                        )}
+                      </div>
                     </button>
                   ))}
                 </div>
               )}
 
               {step === 2 && (
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                  {days.map((d) => (
-                    <button
-                      key={d.key}
-                      type="button"
-                      disabled={d.disabled}
-                      onClick={() => {
-                        setDate(d.key);
+                <div className="flex flex-col items-center justify-center space-y-3 py-1">
+                  <Calendar
+                    mode="single"
+                    selected={date ? new Date(date + "T12:00:00") : undefined}
+                    onSelect={(d) => {
+                      if (d) {
+                        setDate(toDateKey(d));
                         setTime(null);
                         setStep(3);
-                      }}
-                      className={cn(
-                        "rounded-lg border border-border bg-card px-2 py-3 text-center text-xs transition-colors hover:border-foreground/40",
-                        d.disabled && "cursor-not-allowed opacity-30 hover:border-border",
-                        date === d.key && "border-foreground bg-secondary",
-                      )}
-                    >
-                      <span className="block font-display text-sm">{d.label}</span>
-                      <span className="block text-[10px] uppercase text-muted-foreground">
-                        {["dom", "seg", "ter", "qua", "qui", "sex", "sáb"][d.weekday]}
-                      </span>
-                    </button>
-                  ))}
+                      }
+                    }}
+                    disabled={isDateDisabled}
+                    locale={ptBR}
+                    className="rounded-2xl border border-border bg-card p-3 shadow-sm mx-auto pointer-events-auto"
+                  />
+                  {date && (
+                    <p className="text-xs text-center text-muted-foreground">
+                      Data selecionada: <span className="font-semibold text-foreground capitalize">{formatDateLong(date)}</span>
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -283,13 +297,15 @@ export function BookingModal({ open, onOpenChange }: Props) {
                   {slotsQuery.isLoading ? (
                     <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                       {Array.from({ length: 8 }).map((_, i) => (
-                        <Skeleton key={i} className="h-10 w-full" />
+                        <Skeleton key={i} className="h-10 w-full rounded-xl" />
                       ))}
                     </div>
                   ) : (slotsQuery.data?.slots.length ?? 0) === 0 ? (
-                    <p className="py-8 text-center text-sm text-muted-foreground">
-                      Nenhum horário livre nesta data. Escolha outro dia.
-                    </p>
+                    <div className="py-10 text-center">
+                      <p className="text-sm text-muted-foreground">
+                        Nenhum horário livre nesta data. Escolha outro dia.
+                      </p>
+                    </div>
                   ) : (
                     <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                       {slotsQuery.data!.slots.map((s) => (
@@ -301,8 +317,8 @@ export function BookingModal({ open, onOpenChange }: Props) {
                             setStep(4);
                           }}
                           className={cn(
-                            "rounded-lg border border-border bg-card py-2 text-sm transition-colors hover:border-foreground/40",
-                            time === s.time && "border-foreground bg-secondary",
+                            "rounded-xl border border-border bg-card py-2.5 text-center text-sm font-medium transition-all hover:border-foreground/40",
+                            time === s.time && "border-foreground bg-secondary ring-1 ring-foreground font-semibold",
                           )}
                         >
                           {s.time}
@@ -316,13 +332,14 @@ export function BookingModal({ open, onOpenChange }: Props) {
               {step === 4 && (
                 <div className="space-y-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="booking-name">Nome completo</Label>
+                    <Label htmlFor="booking-name" className="text-sm font-medium">Nome completo</Label>
                     <Input
                       id="booking-name"
                       value={name}
                       maxLength={80}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="Seu nome"
+                      className="w-full"
                       aria-invalid={name.length > 0 && !nameValid}
                     />
                     {name.length > 0 && !nameValid && (
@@ -330,13 +347,14 @@ export function BookingModal({ open, onOpenChange }: Props) {
                     )}
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="booking-phone">WhatsApp</Label>
+                    <Label htmlFor="booking-phone" className="text-sm font-medium">WhatsApp</Label>
                     <Input
                       id="booking-phone"
                       inputMode="tel"
                       value={phone}
                       onChange={(e) => setPhone(maskPhone(e.target.value))}
                       placeholder="(19) 90000-0000"
+                      className="w-full"
                       aria-invalid={phone.length > 0 && !phoneValid}
                     />
                     {phone.length > 0 && !phoneValid && (
@@ -344,20 +362,21 @@ export function BookingModal({ open, onOpenChange }: Props) {
                     )}
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="booking-notes">Observações (opcional)</Label>
+                    <Label htmlFor="booking-notes" className="text-sm font-medium">Observações (opcional)</Label>
                     <Textarea
                       id="booking-notes"
                       value={notes}
                       maxLength={280}
                       onChange={(e) => setNotes(e.target.value)}
                       placeholder="Alguma preferência?"
+                      className="w-full min-h-[80px] resize-none"
                     />
                   </div>
                 </div>
               )}
 
               {step === 5 && (
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   <ReviewRow icon={<User className="h-4 w-4" />} label="Barbeiro" value={barber?.name ?? ""} />
                   <ReviewRow
                     icon={<Scissors className="h-4 w-4" />}
@@ -378,23 +397,24 @@ export function BookingModal({ open, onOpenChange }: Props) {
         </div>
 
         {!done && (
-          <div className="flex items-center justify-between gap-3 border-t border-border p-5">
+          <div className="shrink-0 border-t border-border p-4 sm:p-5 bg-card/40 flex items-center justify-between gap-3">
             <Button
-              variant="ghost"
-              size="sm"
+              variant="outline"
+              size="default"
               onClick={() => setStep((s) => Math.max(0, s - 1))}
               disabled={step === 0 || mutation.isPending}
+              className="gap-1.5"
             >
-              <ArrowLeft className="mr-1 h-4 w-4" aria-hidden />
+              <ArrowLeft className="h-4 w-4" aria-hidden />
               Voltar
             </Button>
             {step === 5 ? (
-              <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+              <Button onClick={() => mutation.mutate()} disabled={mutation.isPending} className="flex-1 sm:flex-initial">
                 {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
                 Confirmar agendamento
               </Button>
             ) : (
-              <Button onClick={() => setStep((s) => s + 1)} disabled={!canAdvance}>
+              <Button onClick={() => setStep((s) => s + 1)} disabled={!canAdvance} className="min-w-[110px]">
                 Continuar
               </Button>
             )}
@@ -415,15 +435,15 @@ function ReviewRow({
   value: string;
 }) {
   return (
-    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-lg border border-border bg-card p-3">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-secondary text-muted-foreground">
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 sm:p-3.5 min-w-0">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
         {icon}
       </span>
-      <span className="min-w-0">
-        <span className="block text-[11px] uppercase tracking-wide text-muted-foreground">
+      <span className="min-w-0 flex-1 overflow-hidden">
+        <span className="block text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
           {label}
         </span>
-        <span className="block truncate text-sm">{value}</span>
+        <span className="block truncate text-sm font-medium text-foreground">{value}</span>
       </span>
     </div>
   );
