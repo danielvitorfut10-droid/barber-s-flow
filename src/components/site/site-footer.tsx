@@ -3,8 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Instagram, MapPin, MessageCircle } from "lucide-react";
 import { siteQueryOptions } from "@/lib/queries";
 
-const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
-
 export function SiteFooter() {
   const { data: site } = useQuery(siteQueryOptions);
   const settings = site?.settings;
@@ -12,7 +10,7 @@ export function SiteFooter() {
 
   return (
     <footer className="border-t border-border/60 bg-card/40">
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 md:grid-cols-3">
+      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 md:grid-cols-2">
         <div className="space-y-3">
           <p className="font-display text-sm font-extrabold uppercase tracking-[0.3em]">
             Studio <span className="text-muted-foreground">Blackout</span>
@@ -46,21 +44,7 @@ export function SiteFooter() {
           </div>
         </div>
 
-        <div className="space-y-2">
-          <p className="font-display text-xs uppercase tracking-widest text-muted-foreground">
-            Horários
-          </p>
-          <ul className="space-y-1 text-sm">
-            {(site?.hours ?? []).map((h) => (
-              <li key={h.weekday} className="flex justify-between gap-4">
-                <span className="text-muted-foreground">{WEEKDAYS[h.weekday]}</span>
-                <span>{h.closed ? "Fechado" : `${h.open_time.slice(0, 5)} – ${h.close_time.slice(0, 5)}`}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="space-y-2">
+        <div className="space-y-2 md:justify-self-end">
           {settings?.address && (
             <a
               href={
@@ -79,15 +63,15 @@ export function SiteFooter() {
             </a>
           )}
           <nav className="flex flex-col pt-2 text-sm">
-            <Link to="/termos" className="py-1 text-muted-foreground hover:text-foreground">
+            <a href="/termos" className="py-1 text-muted-foreground hover:text-foreground">
               Termos de uso
-            </Link>
-            <Link to="/privacidade" className="py-1 text-muted-foreground hover:text-foreground">
+            </a>
+            <a href="/privacidade" className="py-1 text-muted-foreground hover:text-foreground">
               Política de privacidade
-            </Link>
-            <Link to="/auth" className="py-1 text-muted-foreground hover:text-foreground">
+            </a>
+            <a href="/auth" className="py-1 text-muted-foreground hover:text-foreground">
               Área da equipe
-            </Link>
+            </a>
           </nav>
         </div>
       </div>

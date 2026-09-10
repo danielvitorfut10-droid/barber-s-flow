@@ -5,12 +5,12 @@ import { Button } from "@/components/ui/button";
 import { useBooking } from "@/components/booking/booking-provider";
 import { cn } from "@/lib/utils";
 
-const LINKS = [
+const LINKS: { to: string; hash?: string; label: string }[] = [
   { to: "/", label: "Início" },
-  { to: "/servicos", label: "Serviços" },
-  { to: "/sobre", label: "Sobre" },
-  { to: "/contato", label: "Contato" },
-] as const;
+  { to: "/", hash: "sobre", label: "Sobre" },
+  { to: "/", hash: "servicos", label: "Serviços" },
+  { to: "/", hash: "localizacao", label: "Localização" },
+];
 
 export function SiteHeader() {
   const { openBooking } = useBooking();
@@ -40,7 +40,7 @@ export function SiteHeader() {
           <img
             src="/logo-black.png"
             alt="Studio Blackout"
-            className="h-12 w-auto max-h-16 object-contain transition-all duration-300 sm:h-14 md:h-16 my-[-6px]"
+            className="h-16 w-auto max-h-28 object-contain transition-all duration-300 sm:h-20 md:h-24 my-[-8px]"
           />
         </Link>
 
@@ -48,11 +48,11 @@ export function SiteHeader() {
           <nav className="hidden items-center gap-1 md:flex">
             {LINKS.map((l) => (
               <Link
-                key={l.to}
+                key={l.label}
                 to={l.to}
+                hash={l.hash}
                 className="rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
                 activeProps={{ className: "text-foreground font-medium" }}
-                activeOptions={{ exact: l.to === "/" }}
               >
                 {l.label}
               </Link>
@@ -77,12 +77,12 @@ export function SiteHeader() {
         <nav className="mx-auto flex max-w-6xl flex-col p-3">
           {LINKS.map((l) => (
             <Link
-              key={l.to}
+              key={l.label}
               to={l.to}
+              hash={l.hash}
               onClick={() => setOpen(false)}
               className="rounded-md px-3 py-2.5 text-sm text-muted-foreground hover:text-foreground"
               activeProps={{ className: "text-foreground font-medium" }}
-              activeOptions={{ exact: l.to === "/" }}
             >
               {l.label}
             </Link>

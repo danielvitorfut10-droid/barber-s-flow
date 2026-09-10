@@ -1,11 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { MapPin } from "lucide-react";
+import { MapPin, Clock, ExternalLink, Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useBooking } from "@/components/booking/booking-provider";
 import { siteQueryOptions } from "@/lib/queries";
 import { formatBRL, formatDuration } from "@/lib/format";
 import sobreImg from "@/assets/sobre-barbearia.jpg";
+
+const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -164,6 +166,149 @@ function Home() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      </section>
+
+      {/* SEÇÃO LOCALIZAÇÃO E HORÁRIOS (Fundo Branco) */}
+      <section id="localizacao" className="w-full bg-white text-zinc-900 py-24 px-4 border-t border-zinc-200">
+        <div className="mx-auto max-w-6xl">
+          {/* Cabeçalho da Seção */}
+          <div className="text-center mb-14">
+            <h2 className="font-display text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-zinc-900 mb-3">
+              Nossa Localização
+            </h2>
+            <div className="flex items-center justify-center gap-3 text-xs uppercase tracking-[0.25em] font-semibold text-zinc-500">
+              <span className="h-px w-8 bg-zinc-300" />
+              <span>VENHA NOS VISITAR</span>
+              <span className="h-px w-8 bg-zinc-300" />
+            </div>
+          </div>
+
+          {/* Grid: Card do Mapa e Card dos Horários */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
+            {/* CARD 1: MAPA CLICÁVEL */}
+            <a
+              href={
+                site?.settings?.maps_url ||
+                `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                  `${site?.settings?.address || "Studio Blackout Campinas"}, Campinas - SP`
+                )}`
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Abrir endereço no Google Maps"
+              className="group relative flex flex-col justify-between min-h-[380px] sm:min-h-[440px] rounded-2xl border border-zinc-300 bg-zinc-100 overflow-hidden shadow-xl transition-all duration-300 hover:border-zinc-900 hover:shadow-2xl cursor-pointer"
+            >
+              {/* Mapa de Fundo Interativo (Google Maps Embed Claro) */}
+              <div className="absolute inset-0 z-0 overflow-hidden">
+                <iframe
+                  title="Localização Studio Blackout no Mapa"
+                  width="100%"
+                  height="100%"
+                  className="w-full h-full border-0 opacity-90 transition-all duration-500 group-hover:opacity-100 group-hover:scale-105 pointer-events-none"
+                  loading="lazy"
+                  allowFullScreen
+                  src={`https://maps.google.com/maps?q=${encodeURIComponent(
+                    `${site?.settings?.address || "Studio Blackout Campinas"}, Campinas - SP`
+                  )}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                />
+              </div>
+
+              {/* Overlay suave para legibilidade e destaque do clique */}
+              <div className="absolute inset-0 z-10 bg-gradient-to-t from-black/85 via-black/25 to-black/40 transition-opacity group-hover:from-black/90 group-hover:via-black/15" />
+
+              {/* Tag Topo: Nome da Barbearia */}
+              <div className="relative z-20 p-5 flex items-center justify-between">
+                <div className="inline-flex items-center gap-2 rounded-full bg-zinc-900/90 backdrop-blur-md px-4 py-1.5 border border-zinc-700 text-xs font-semibold text-white shadow-lg">
+                  <MapPin className="h-4 w-4 text-[#39ff14]" />
+                  <span>Studio Blackout</span>
+                </div>
+                <div className="inline-flex items-center gap-1 rounded-full bg-zinc-900/90 backdrop-blur-md px-3 py-1 border border-zinc-700 text-[11px] font-bold text-[#39ff14]">
+                  <span>Abrir GPS</span>
+                  <ExternalLink className="h-3 w-3" />
+                </div>
+              </div>
+
+              {/* Conteúdo Inferior: Endereço e Botão de Ação */}
+              <div className="relative z-20 p-6 sm:p-8 space-y-4">
+                <div>
+                  <span className="text-xs uppercase tracking-widest text-[#39ff14] font-bold block mb-1">
+                    Endereço Principal
+                  </span>
+                  <p className="text-lg sm:text-xl font-bold text-white group-hover:text-[#39ff14] transition-colors leading-snug">
+                    {site?.settings?.address || "Endereço não cadastrado"}
+                  </p>
+                </div>
+
+                <div className="pt-2 flex items-center gap-3">
+                  <div className="inline-flex items-center gap-2 rounded-xl bg-[#39ff14] px-5 py-2.5 text-xs font-bold text-black shadow-lg transition-transform group-hover:scale-105">
+                    <span>Clique para abrir no Google Maps</span>
+                    <Navigation className="h-4 w-4 fill-current" />
+                  </div>
+                </div>
+              </div>
+            </a>
+
+            {/* CARD 2: HORÁRIOS DE FUNCIONAMENTO (Estilo Fundo Claro) */}
+            <div className="flex flex-col justify-between rounded-2xl border border-zinc-200 bg-zinc-50 p-6 sm:p-8 shadow-xl relative overflow-hidden text-zinc-900">
+              <div className="space-y-6">
+                {/* Cabeçalho do Card */}
+                <div className="flex items-center gap-3 border-b border-zinc-200 pb-5">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-900 text-[#39ff14] shadow-md">
+                    <Clock className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-display text-xl font-bold text-zinc-900">Horários de Funcionamento</h3>
+                    <p className="text-xs text-zinc-500">Atendimento com pontualidade e agendamento</p>
+                  </div>
+                </div>
+
+                {/* Lista de Horários */}
+                <ul className="space-y-2.5 text-sm">
+                  {(site?.hours ?? []).map((h) => {
+                    const todayWeekday = new Date().getDay();
+                    const isToday = h.weekday === todayWeekday;
+                    return (
+                      <li
+                        key={h.weekday}
+                        className={`flex items-center justify-between p-2.5 rounded-lg transition-colors ${
+                          isToday
+                            ? "bg-emerald-50 border border-emerald-300 font-medium"
+                            : "hover:bg-zinc-200/50"
+                        }`}
+                      >
+                        <span className="flex items-center gap-2 text-zinc-700 font-medium">
+                          {WEEKDAYS[h.weekday]}
+                          {isToday && (
+                            <span className="rounded bg-[#39ff14] px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-black">
+                              Hoje
+                            </span>
+                          )}
+                        </span>
+                        <span
+                          className={`font-semibold ${
+                            h.closed ? "text-zinc-400" : isToday ? "text-emerald-700" : "text-zinc-900"
+                          }`}
+                        >
+                          {h.closed ? "Fechado" : `${h.open_time.slice(0, 5)} – ${h.close_time.slice(0, 5)}`}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              {/* Botão de Agendamento Rápido no Card */}
+              <div className="mt-8 pt-5 border-t border-zinc-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <p className="text-xs text-zinc-500 text-center sm:text-left">
+                  Prefere garantir seu horário sem filas?
+                </p>
+                <Button size="sm" onClick={openBooking} className="w-full sm:w-auto font-semibold bg-zinc-900 text-white hover:bg-zinc-800">
+                  Agendar agora
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
