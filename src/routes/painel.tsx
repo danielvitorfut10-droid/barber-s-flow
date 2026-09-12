@@ -1077,7 +1077,7 @@ function ClientesTab({ barber, role }: { barber: { id: string } | null; role: st
       const { data } = await q;
       return (data ?? []) as Appointment[];
     },
-    enabled: role !== null,
+    enabled: role !== null && !!barber?.id,
   });
 
   // Cancellation mutation
