@@ -653,7 +653,7 @@ function AgendamentosTab({ barber, role }: { barber: { id: string; name: string 
       const { data } = await q;
       return (data ?? []) as BlockedSlot[];
     },
-    enabled: role !== null,
+    enabled: role !== null && !!barber?.id,
   });
 
   // Business hours for selected day
