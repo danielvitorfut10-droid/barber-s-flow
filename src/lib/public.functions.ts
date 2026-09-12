@@ -79,8 +79,8 @@ export const getAvailability = createServerFn({ method: "POST" })
         .select("starts_at, ends_at")
         .eq("barber_id", data.barberId)
         .neq("status", "cancelado")
-        .gte("starts_at", range.start)
-        .lt("starts_at", range.end),
+        .lt("starts_at", range.end)
+        .gt("ends_at", range.start),
       supabaseAdmin
         .from("blocked_slots")
         .select("starts_at, ends_at, reason")
@@ -137,6 +137,42 @@ export const createBooking = createServerFn({ method: "POST" })
       return { ok: false as const, error: "Escolha um horário futuro." };
     }
     const endsAt = new Date(startsAt.getTime() + service.duration_min * 60 * 1000);
+    const startsAtIso = startsAt.toISOString();
+    const endsAtIso = endsAt.toISOString();
+
+    // Verificação de conflito de agendamento em tempo de execução
+    const [existingAppts, existingBlocks] = await Promise.all([
+      supabaseAdmin
+        .from("appointments")
+        .select("id")
+        .eq("barber_id", barber.id)
+        .neq("status", "cancelado")
+        .lt("starts_at", endsAtIso)
+        .gt("ends_at", startsAtIso)
+        .limit(1),
+      supabaseAdmin
+        .from("blocked_slots")
+        .select("id, reason")
+        .eq("barber_id", barber.id)
+        .lt("starts_at", endsAtIso)
+        .gt("ends_at", startsAtIso)
+        .limit(1),
+    ]);
+
+    if (existingAppts.data && existingAppts.data.length > 0) {
+      return {
+        ok: false as const,
+        error: "Esse horário acabou de ser reservado por outro cliente. Por favor, escolha outro horário disponível.",
+      };
+    }
+
+    const hasRealBlock = (existingBlocks.data ?? []).some((b) => b.reason !== "desbloqueado");
+    if (hasRealBlock) {
+      return {
+        ok: false as const,
+        error: "Esse horário está indisponível ou foi bloqueado pelo barbeiro. Escolha outro horário.",
+      };
+    }
 
     const { data: created, error } = await supabaseAdmin
       .from("appointments")
@@ -145,8 +181,8 @@ export const createBooking = createServerFn({ method: "POST" })
         service_id: service.id,
         client_name: data.name,
         client_phone: data.phone,
-        starts_at: startsAt.toISOString(),
-        ends_at: endsAt.toISOString(),
+        starts_at: startsAtIso,
+        ends_at: endsAtIso,
         price_cents: service.price_cents,
         notes: data.notes || null,
       })

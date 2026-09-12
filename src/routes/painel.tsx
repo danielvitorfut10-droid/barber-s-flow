@@ -432,8 +432,8 @@ function ReceitaTab({ barber, role }: { barber: { id: string } | null; role: str
         .neq("status", "cancelado")
         .order("starts_at", { ascending: false });
 
-      // Admin sees all; barber sees own
-      if (role === "barber" && barber?.id) {
+      // Cada barbeiro admin acessa exclusivamente os seus próprios agendamentos
+      if (barber?.id) {
         q = q.eq("barber_id", barber.id);
       }
 
@@ -633,7 +633,7 @@ function AgendamentosTab({ barber, role }: { barber: { id: string; name: string 
         .gte("starts_at", monthStart.toISOString())
         .lt("starts_at", monthEnd.toISOString());
 
-      if (role === "barber" && barber?.id) q = q.eq("barber_id", barber.id);
+      if (barber?.id) q = q.eq("barber_id", barber.id);
       const { data } = await q;
       return data ?? [];
     },
@@ -649,7 +649,7 @@ function AgendamentosTab({ barber, role }: { barber: { id: string; name: string 
         .gte("starts_at", monthStart.toISOString())
         .lt("starts_at", monthEnd.toISOString());
 
-      if (role === "barber" && barber?.id) q = q.eq("barber_id", barber.id);
+      if (barber?.id) q = q.eq("barber_id", barber.id);
       const { data } = await q;
       return (data ?? []) as BlockedSlot[];
     },
@@ -1070,7 +1070,7 @@ function ClientesTab({ barber, role }: { barber: { id: string } | null; role: st
         .select("id, client_name, client_phone, starts_at, ends_at, price_cents, status, notes, services(name), barbers(name)")
         .order("starts_at", { ascending: false });
 
-      if (role === "barber" && barber?.id) {
+      if (barber?.id) {
         q = q.eq("barber_id", barber.id);
       }
 

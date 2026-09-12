@@ -19,6 +19,18 @@ export function buildWhatsappLink(input: {
     `Horário: ${input.timeLabel}`,
     `Valor: ${input.priceLabel}`,
   ].join("\n");
-  const number = input.whatsapp.replace(/\D/g, "");
-  return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
+
+  const lowerBarber = (input.barberName || "").toLowerCase();
+  let targetNumber = input.whatsapp ? input.whatsapp.replace(/\D/g, "") : "";
+
+  // Redirecionamento dinâmico baseado no barbeiro selecionado
+  if (lowerBarber.includes("rian")) {
+    targetNumber = "5519920037087";
+  } else if (lowerBarber.includes("lemuel") || lowerBarber.includes("lemoel")) {
+    targetNumber = "5519986078202";
+  } else if (targetNumber && !targetNumber.startsWith("55") && targetNumber.length <= 11) {
+    targetNumber = `55${targetNumber}`;
+  }
+
+  return `https://wa.me/${targetNumber || "5519920037087"}?text=${encodeURIComponent(message)}`;
 }

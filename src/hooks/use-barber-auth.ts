@@ -37,24 +37,52 @@ export function useBarberAuth(): BarberAuthState & { signOut: () => Promise<void
         return;
       }
 
-      const [{ data: roles }, { data: barbers }] = await Promise.all([
+      const userEmail = (user.email ?? "").toLowerCase();
+      const isAdminEmail =
+        userEmail === "rianbueno2018@gmail.com" ||
+        userEmail === "barbosalemueltrabalho@gmail.com";
+
+      let [{ data: roles }, { data: barberData }] = await Promise.all([
         supabase.from("user_roles").select("role").eq("user_id", user.id),
-        supabase.from("barbers").select("id, name, nickname, photo_url").eq("user_id", user.id).maybeSingle(),
+        supabase
+          .from("barbers")
+          .select("id, name, nickname, photo_url")
+          .eq("user_id", user.id)
+          .maybeSingle(),
       ]);
 
-      const role = roles?.find((r) => r.role === "admin")
+      // Se a role ainda não estiver cadastrada no banco mas for um dos emails admins conhecidos
+      let role: "admin" | "barber" | null = roles?.find((r) => r.role === "admin")
         ? "admin"
         : roles?.find((r) => r.role === "barber")
           ? "barber"
-          : null;
+          : isAdminEmail
+            ? "admin"
+            : null;
+
+      // Se não encontrou o barbeiro pelo user_id, buscar por nome de acordo com o e-mail e fazer o vínculo
+      if (!barberData && isAdminEmail) {
+        const searchTerm = userEmail.includes("lemuel") ? "Lemuel" : "Rian";
+        const { data: matchedBarber } = await supabase
+          .from("barbers")
+          .select("id, name, nickname, photo_url")
+          .ilike("name", `%${searchTerm}%`)
+          .maybeSingle();
+
+        if (matchedBarber) {
+          barberData = matchedBarber;
+          // Atualiza user_id no banco em segundo plano para persistir a associação
+          supabase.from("barbers").update({ user_id: user.id }).eq("id", matchedBarber.id).then();
+        }
+      }
 
       if (mounted) {
         setState({
           user,
-          barber: barbers ?? null,
+          barber: barberData ?? null,
           role,
           loading: false,
-          isAuthorized: role === "admin" || role === "barber",
+          isAuthorized: role === "admin" || role === "barber" || isAdminEmail,
         });
       }
     }
