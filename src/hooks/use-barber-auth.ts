@@ -80,7 +80,7 @@ export function useBarberAuth(): BarberAuthState & { signOut: () => Promise<void
           barber: barberData ?? null,
           role,
           loading: false,
-          isAuthorized: role === "admin" || role === "barber" || isAdminEmail,
+          isAuthorized: (role === "admin" || role === "barber") && !!barberData,
         });
       }
     }
