@@ -38,7 +38,7 @@ export function useBarberAuth(): BarberAuthState & { signOut: () => Promise<void
       }
 
       const userEmail = (user.email ?? "").toLowerCase();
-      const isAdminEmail =
+      const isStaffEmail =
         userEmail === "rianbueno2018@gmail.com" ||
         userEmail === "barbosalemueltrabalho@gmail.com";
 
@@ -51,17 +51,15 @@ export function useBarberAuth(): BarberAuthState & { signOut: () => Promise<void
           .maybeSingle(),
       ]);
 
-      // Se a role ainda não estiver cadastrada no banco mas for um dos emails admins conhecidos
+      // Cada profissional entra apenas no seu próprio painel (sem admin geral)
       let role: "admin" | "barber" | null = roles?.find((r) => r.role === "admin")
         ? "admin"
         : roles?.find((r) => r.role === "barber")
           ? "barber"
-          : isAdminEmail
-            ? "admin"
-            : null;
+          : null;
 
       // Se não encontrou o barbeiro pelo user_id, buscar por nome de acordo com o e-mail e fazer o vínculo
-      if (!barberData && isAdminEmail) {
+      if (!barberData && isStaffEmail) {
         const searchTerm = userEmail.includes("lemuel") ? "Lemuel" : "Rian";
         const { data: matchedBarber } = await supabase
           .from("barbers")
