@@ -637,7 +637,7 @@ function AgendamentosTab({ barber, role }: { barber: { id: string; name: string 
       const { data } = await q;
       return data ?? [];
     },
-    enabled: role !== null,
+    enabled: role !== null && !!barber?.id,
   });
 
   const { data: blockedSlots = [] } = useQuery({
