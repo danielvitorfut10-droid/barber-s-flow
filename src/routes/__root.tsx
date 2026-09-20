@@ -89,6 +89,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "author", content: "Studio Blackout" },
       { property: "og:type", content: "website" },
       { property: "og:site_name", content: "Studio Blackout" },
+      { property: "og:url", content: "https://studioblackout.com.br" },
       { name: "twitter:card", content: "summary_large_image" },
       { title: "Studio Blackout — Barbearia premium com agendamento online" },
       { property: "og:title", content: "Studio Blackout — Barbearia premium com agendamento online" },
@@ -100,6 +101,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/b306752a-d060-4f83-ada0-d5525aeaa042/id-preview-3ea1a44b--7a263d8f-5371-42bc-ad05-07bc7a9ae74a.lovable.app-1785894619680.png" },
     ],
     links: [
+      { rel: "canonical", href: "https://studioblackout.com.br" },
       { rel: "stylesheet", href: appCss },
       { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
