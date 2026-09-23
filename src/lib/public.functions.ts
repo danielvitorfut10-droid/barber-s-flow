@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { buildSlots, dayRange, toIntervals, weekdayOf } from "./booking.server";
+import { publicClient } from "./supabase-public.server";
 
 const availabilitySchema = z.object({
   barberId: z.string().uuid(),
@@ -19,7 +20,7 @@ const bookingSchema = z.object({
 });
 
 export const getSiteData = createServerFn({ method: "GET" }).handler(async () => {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const supabaseAdmin = publicClient();
 
   const [barbers, services, hours, settings] = await Promise.all([
     supabaseAdmin
@@ -54,7 +55,7 @@ export const getSiteData = createServerFn({ method: "GET" }).handler(async () =>
 export const getAvailability = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => availabilitySchema.parse(data))
   .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = publicClient();
 
     const [{ data: service }, { data: hour }, { data: settings }] = await Promise.all([
       supabaseAdmin
@@ -73,28 +74,16 @@ export const getAvailability = createServerFn({ method: "POST" })
     if (!service || !hour || hour.closed) return { slots: [] as { time: string; iso: string }[] };
 
     const range = dayRange(data.date);
-    const [appointments, blocks] = await Promise.all([
-      supabaseAdmin
-        .from("appointments")
-        .select("starts_at, ends_at")
-        .eq("barber_id", data.barberId)
-        .neq("status", "cancelado")
-        .lt("starts_at", range.end)
-        .gt("ends_at", range.start),
-      supabaseAdmin
-        .from("blocked_slots")
-        .select("starts_at, ends_at, reason")
-        .eq("barber_id", data.barberId)
-        .lt("starts_at", range.end)
-        .gt("ends_at", range.start),
-    ]);
-
-    const allBlocks = blocks.data ?? [];
-    const unblockedNightStarts = allBlocks
-      .filter((b) => b.reason === "desbloqueado")
-      .map((b) => new Date(b.starts_at).getTime());
-
-    const actualBlocks = allBlocks.filter((b) => b.reason !== "desbloqueado");
+    const { data: busyRows } = await supabaseAdmin.rpc("get_public_busy", {
+      _barber_id: data.barberId,
+      _start: range.start,
+      _end: range.end,
+    });
+    const rows = busyRows ?? [];
+    const unblockedNightStarts = rows
+      .filter((r) => r.kind === "unblocked")
+      .map((r) => new Date(r.starts_at).getTime());
+    const busy = rows.filter((r) => r.kind !== "unblocked");
 
     const slots = buildSlots({
       dateStr: data.date,
@@ -102,7 +91,7 @@ export const getAvailability = createServerFn({ method: "POST" })
       closeTime: String(hour.close_time).slice(0, 5),
       intervalMin: settings?.slot_interval_min ?? 30,
       durationMin: service.duration_min,
-      busy: toIntervals([...(appointments.data ?? []), ...actualBlocks]),
+      busy: toIntervals(busy),
       unblockedNightStarts,
     });
 
@@ -112,105 +101,33 @@ export const getAvailability = createServerFn({ method: "POST" })
 export const createBooking = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => bookingSchema.parse(data))
   .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const supabasePublic = publicClient();
     const { toIso } = await import("./format");
-
-    const [{ data: service }, { data: barber }] = await Promise.all([
-      supabaseAdmin
-        .from("services")
-        .select("id, name, price_cents, duration_min, active")
-        .eq("id", data.serviceId)
-        .maybeSingle(),
-      supabaseAdmin
-        .from("barbers")
-        .select("id, name, active")
-        .eq("id", data.barberId)
-        .maybeSingle(),
-    ]);
-
-    if (!service?.active || !barber?.active) {
-      return { ok: false as const, error: "Serviço ou barbeiro indisponível." };
-    }
-
     const startsAt = new Date(toIso(data.date, data.time));
-    if (Number.isNaN(startsAt.getTime()) || startsAt.getTime() < Date.now()) {
+    if (Number.isNaN(startsAt.getTime())) {
       return { ok: false as const, error: "Escolha um horário futuro." };
     }
-    const endsAt = new Date(startsAt.getTime() + service.duration_min * 60 * 1000);
-    const startsAtIso = startsAt.toISOString();
-    const endsAtIso = endsAt.toISOString();
-
-    // Verificação de conflito de agendamento em tempo de execução
-    const [existingAppts, existingBlocks] = await Promise.all([
-      supabaseAdmin
-        .from("appointments")
-        .select("id")
-        .eq("barber_id", barber.id)
-        .neq("status", "cancelado")
-        .lt("starts_at", endsAtIso)
-        .gt("ends_at", startsAtIso)
-        .limit(1),
-      supabaseAdmin
-        .from("blocked_slots")
-        .select("id, reason")
-        .eq("barber_id", barber.id)
-        .lt("starts_at", endsAtIso)
-        .gt("ends_at", startsAtIso)
-        .limit(1),
-    ]);
-
-    if (existingAppts.data && existingAppts.data.length > 0) {
-      return {
-        ok: false as const,
-        error: "Esse horário acabou de ser reservado por outro cliente. Por favor, escolha outro horário disponível.",
-      };
-    }
-
-    const hasRealBlock = (existingBlocks.data ?? []).some((b) => b.reason !== "desbloqueado");
-    if (hasRealBlock) {
-      return {
-        ok: false as const,
-        error: "Esse horário está indisponível ou foi bloqueado pelo barbeiro. Escolha outro horário.",
-      };
-    }
-
-    const { data: created, error } = await supabaseAdmin
-      .from("appointments")
-      .insert({
-        barber_id: barber.id,
-        service_id: service.id,
-        client_name: data.name,
-        client_phone: data.phone,
-        starts_at: startsAtIso,
-        ends_at: endsAtIso,
-        price_cents: service.price_cents,
-        notes: data.notes || null,
-      })
-      .select("id")
-      .maybeSingle();
-
-    if (error) {
-      const conflict = error.code === "23P01";
-      return {
-        ok: false as const,
-        error: conflict
-          ? "Esse horário acabou de ser reservado. Escolha outro, por favor."
-          : "Não foi possível concluir o agendamento. Tente novamente.",
-      };
-    }
-
-    await supabaseAdmin.from("notifications").insert({
-      barber_id: barber.id,
-      type: "novo_agendamento",
-      title: "Novo agendamento",
-      body: `${data.name} • ${service.name} • ${data.date} ${data.time}`,
+    const { data: res, error } = await supabasePublic.rpc("create_public_booking", {
+      _barber_id: data.barberId,
+      _service_id: data.serviceId,
+      _starts_at: startsAt.toISOString(),
+      _name: data.name,
+      _phone: data.phone,
+      _notes: data.notes || "",
+      _label: `${data.date} ${data.time}`,
     });
-
+    const r = (res ?? {}) as {
+      ok?: boolean; error?: string; id?: string; barberName?: string; serviceName?: string; priceCents?: number;
+    };
+    if (error || !r.ok) {
+      if (error) console.error(error);
+      return { ok: false as const, error: r.error ?? "Não foi possível concluir o agendamento. Tente novamente." };
+    }
     return {
       ok: true as const,
-      id: created?.id ?? null,
-      barberName: barber.name,
-      serviceName: service.name,
-      priceCents: service.price_cents,
+      id: r.id ?? null,
+      barberName: r.barberName ?? "",
+      serviceName: r.serviceName ?? "",
+      priceCents: r.priceCents ?? 0,
     };
   });
