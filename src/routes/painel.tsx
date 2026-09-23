@@ -34,6 +34,7 @@ import {
   User,
   AlertTriangle,
   Phone,
+  Plus,
 } from "lucide-react";
 import {
   format,
@@ -100,6 +101,7 @@ function PainelPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("receita");
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [addModalOpen, setAddModalOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   // Close user menu on outside click
@@ -193,29 +195,49 @@ function PainelPage() {
             )}
           </div>
 
-          {/* Center: Tabs */}
-          <nav className="flex gap-1 sm:gap-2">
-            <TabButton active={activeTab === "receita"} onClick={() => setActiveTab("receita")}>
-              <BarChart3 className="h-4 w-4" />
-              <span className="hidden sm:inline">Receita</span>
-            </TabButton>
-            <TabButton active={activeTab === "agendamentos"} onClick={() => setActiveTab("agendamentos")}>
-              <CalendarDays className="h-4 w-4" />
-              <span className="hidden sm:inline">Agenda</span>
-            </TabButton>
-            <TabButton active={activeTab === "clientes"} onClick={() => setActiveTab("clientes")}>
-              <Users className="h-4 w-4" />
-              <span className="hidden sm:inline">Clientes</span>
-            </TabButton>
-          </nav>
+          {/* Center/Right: Tabs & Green Adicionar Button */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <nav className="flex gap-1 sm:gap-2">
+              <TabButton active={activeTab === "receita"} onClick={() => setActiveTab("receita")}>
+                <BarChart3 className="h-4 w-4" />
+                <span className="hidden sm:inline">Receita</span>
+              </TabButton>
+              <TabButton active={activeTab === "agendamentos"} onClick={() => setActiveTab("agendamentos")}>
+                <CalendarDays className="h-4 w-4" />
+                <span className="hidden sm:inline">Agenda</span>
+              </TabButton>
+              <TabButton active={activeTab === "clientes"} onClick={() => setActiveTab("clientes")}>
+                <Users className="h-4 w-4" />
+                <span className="hidden sm:inline">Clientes</span>
+              </TabButton>
+            </nav>
+
+            <button
+              id="admin-add-appointment-btn"
+              onClick={() => setAddModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 sm:px-4 sm:py-2 text-xs shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"
+              title="Adicionar Atendimento"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Adicionar</span>
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-7xl px-3 py-6 sm:px-4 sm:py-8">
-        {activeTab === "receita" && <ReceitaTab barber={barber} role={role} />}
-        {activeTab === "agendamentos" && <AgendamentosTab barber={barber} role={role} />}
-        {activeTab === "clientes" && <ClientesTab barber={barber} role={role} />}
+        {activeTab === "receita" && <ReceitaTab barber={barber} role={role} onOpenAddModal={() => setAddModalOpen(true)} />}
+        {activeTab === "agendamentos" && <AgendamentosTab barber={barber} role={role} onOpenAddModal={() => setAddModalOpen(true)} />}
+        {activeTab === "clientes" && <ClientesTab barber={barber} role={role} onOpenAddModal={() => setAddModalOpen(true)} />}
       </main>
+
+      {addModalOpen && (
+        <AddAppointmentModal
+          barber={barber}
+          role={role}
+          onClose={() => setAddModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -416,7 +438,15 @@ function MiniCalendarPicker({
 // ─────────────────────────────────────────────
 // Receita Tab
 // ─────────────────────────────────────────────
-function ReceitaTab({ barber, role }: { barber: { id: string } | null; role: string | null }) {
+function ReceitaTab({
+  barber,
+  role,
+  onOpenAddModal,
+}: {
+  barber: { id: string } | null;
+  role: string | null;
+  onOpenAddModal?: () => void;
+}) {
   const now = new Date();
   const [dateRange, setDateRange] = useState<DateRange>({
     from: startOfDay(startOfMonth(now)),
@@ -467,10 +497,21 @@ function ReceitaTab({ barber, role }: { barber: { id: string } | null; role: str
 
   return (
     <div className="space-y-6">
-      {/* Header + date picker */}
+      {/* Header + date picker & green Adicionar button */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold text-white sm:text-2xl">Receita</h1>
-        <MiniCalendarPicker value={dateRange} onChange={setDateRange} />
+        <div className="flex items-center gap-2">
+          {onOpenAddModal && (
+            <button
+              onClick={onOpenAddModal}
+              className="flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 text-xs shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Adicionar</span>
+            </button>
+          )}
+          <MiniCalendarPicker value={dateRange} onChange={setDateRange} />
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -614,7 +655,15 @@ function StatusBadge({ status }: { status: string }) {
 // ─────────────────────────────────────────────
 // Agendamentos Tab
 // ─────────────────────────────────────────────
-function AgendamentosTab({ barber, role }: { barber: { id: string; name: string } | null; role: string | null }) {
+function AgendamentosTab({
+  barber,
+  role,
+  onOpenAddModal,
+}: {
+  barber: { id: string; name: string } | null;
+  role: string | null;
+  onOpenAddModal?: () => void;
+}) {
   const queryClient = useQueryClient();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<Date | null>(new Date());
@@ -711,7 +760,7 @@ function AgendamentosTab({ barber, role }: { barber: { id: string; name: string 
   const calEnd = endOfWeek(endOfMonth(currentMonth), { weekStartsOn: 0 });
   const calDays = eachDayOfInterval({ start: calStart, end: calEnd });
 
-  // For selected day — build time slots up to 00:00 (midnight)
+  // For selected day — build time slots starting from 06:00 AM up to 00:00 (midnight)
   const selectedDaySlots = (() => {
     if (!selectedDay) return [];
     const weekday = selectedDay.getDay();
@@ -719,11 +768,11 @@ function AgendamentosTab({ barber, role }: { barber: { id: string; name: string 
     if (!hours || hours.closed) return [];
 
     const interval = settings?.slot_interval_min ?? 30;
-    const [openH, openM] = hours.open_time.slice(0, 5).split(":").map(Number);
+    const [openH] = hours.open_time.slice(0, 5).split(":").map(Number);
 
-    const slots: { time: string; iso: string; isNight: boolean }[] = [];
-    let h = openH;
-    let m = openM;
+    const slots: { time: string; iso: string; isNight: boolean; isEarly: boolean }[] = [];
+    let h = 6;
+    let m = 0;
     // Extend closing time to 23:59 so 23:30 slot ending at 00:00 is generated
     while (h * 60 + m < 23 * 60 + 59) {
       const iso = new Date(
@@ -737,6 +786,7 @@ function AgendamentosTab({ barber, role }: { barber: { id: string; name: string 
         time: `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`,
         iso,
         isNight: h >= 19,
+        isEarly: h < openH,
       });
       m += interval;
       if (m >= 60) {
@@ -757,9 +807,20 @@ function AgendamentosTab({ barber, role }: { barber: { id: string; name: string 
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Agendamentos</h1>
-        <p className="text-sm text-zinc-500">Clique em um dia para gerenciar os horários</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Agendamentos</h1>
+          <p className="text-xs text-zinc-500 sm:text-sm">Clique em um dia para gerenciar os horários</p>
+        </div>
+        {onOpenAddModal && (
+          <button
+            onClick={onOpenAddModal}
+            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3.5 py-2 text-xs shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Adicionar Atendimento</span>
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
@@ -874,7 +935,7 @@ function AgendamentosTab({ barber, role }: { barber: { id: string; name: string 
                 return (
                   <>
                     <p className="mb-5 text-xs text-zinc-500">
-                      {hours.open_time.slice(0, 5)} – 00:00
+                      06:00 – 00:00
                     </p>
                     <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
                       {selectedDaySlots.map((slot) => {
@@ -915,9 +976,10 @@ function AgendamentosTab({ barber, role }: { barber: { id: string; name: string 
                           );
                         }
 
-                        // Night slot (>= 19:00): Blocked by default unless block?.reason === 'desbloqueado'
-                        if (slot.isNight) {
+                        // Morning (< 09:00) or Night (>= 19:00) slot: Blocked by default unless block?.reason === 'desbloqueado'
+                        if (slot.isEarly || slot.isNight) {
                           const isUnblocked = block?.reason === "desbloqueado";
+                          const label = slot.isEarly ? "Manhã" : "Noturno";
 
                           if (isUnblocked && block) {
                             return (
@@ -929,7 +991,7 @@ function AgendamentosTab({ barber, role }: { barber: { id: string; name: string 
                                   <Clock className="h-4 w-4 text-emerald-400 shrink-0" />
                                   <div>
                                     <p className="text-xs font-bold text-emerald-300">{slot.time}</p>
-                                    <p className="text-[10px] text-emerald-400/70">Noturno (Liberado)</p>
+                                    <p className="text-[10px] text-emerald-400/70">{label} (Liberado)</p>
                                   </div>
                                 </div>
                                 <button
@@ -957,7 +1019,7 @@ function AgendamentosTab({ barber, role }: { barber: { id: string; name: string 
                                 <Lock className="h-4 w-4 text-red-400 shrink-0" />
                                 <div>
                                   <p className="text-xs font-bold text-red-300">{slot.time}</p>
-                                  <p className="text-[10px] text-red-400/70">Noturno (Bloqueado)</p>
+                                  <p className="text-[10px] text-red-400/70">{label} (Bloqueado)</p>
                                 </div>
                               </div>
                               <button
@@ -1055,7 +1117,15 @@ function AgendamentosTab({ barber, role }: { barber: { id: string; name: string 
 // ─────────────────────────────────────────────
 // Clientes Tab
 // ─────────────────────────────────────────────
-function ClientesTab({ barber, role }: { barber: { id: string } | null; role: string | null }) {
+function ClientesTab({
+  barber,
+  role,
+  onOpenAddModal,
+}: {
+  barber: { id: string } | null;
+  role: string | null;
+  onOpenAddModal?: () => void;
+}) {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("todos");
@@ -1128,10 +1198,22 @@ function ClientesTab({ barber, role }: { barber: { id: string } | null; role: st
           </p>
         </div>
 
-        {/* Total Badge */}
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-2 text-right">
-          <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Total Registrado</p>
-          <p className="text-lg font-extrabold text-[#39ff14]">{appointments.length} agendamentos</p>
+        {/* Right side controls: Total Badge + Green Adicionar Button */}
+        <div className="flex items-center gap-3">
+          {onOpenAddModal && (
+            <button
+              onClick={onOpenAddModal}
+              className="flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3.5 py-2 text-xs shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Adicionar</span>
+            </button>
+          )}
+
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-2 text-right">
+            <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Total Registrado</p>
+            <p className="text-lg font-extrabold text-[#39ff14]">{appointments.length} agendamentos</p>
+          </div>
         </div>
       </div>
 
@@ -1342,6 +1424,260 @@ function ClientesTab({ barber, role }: { barber: { id: string } | null; role: st
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Modal: Adicionar Atendimento Manual (Concluído)
+// ─────────────────────────────────────────────
+function AddAppointmentModal({
+  barber,
+  role,
+  onClose,
+}: {
+  barber: { id: string; name?: string } | null;
+  role: string | null;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [clientName, setClientName] = useState("");
+  const [clientPhone, setClientPhone] = useState("");
+  const [selectedBarberId, setSelectedBarberId] = useState(barber?.id ?? "");
+  const [serviceId, setServiceId] = useState("");
+  const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [time, setTime] = useState(format(new Date(), "HH:mm"));
+  const [notes, setNotes] = useState("");
+
+  // Fetch active services
+  const { data: services = [] } = useQuery({
+    queryKey: ["active-services"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("services")
+        .select("id, name, price_cents, duration_min")
+        .eq("active", true)
+        .order("sort_order");
+      return data ?? [];
+    },
+  });
+
+  // Fetch active barbers if admin
+  const { data: barbers = [] } = useQuery({
+    queryKey: ["active-barbers"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("barbers")
+        .select("id, name")
+        .eq("active", true)
+        .order("sort_order");
+      return data ?? [];
+    },
+    enabled: role === "admin",
+  });
+
+  useEffect(() => {
+    if (!selectedBarberId && barber?.id) {
+      setSelectedBarberId(barber.id);
+    } else if (!selectedBarberId && barbers.length > 0) {
+      setSelectedBarberId(barbers[0].id);
+    }
+  }, [barber, barbers, selectedBarberId]);
+
+  useEffect(() => {
+    if (!serviceId && services.length > 0) {
+      setServiceId(services[0].id);
+    }
+  }, [services, serviceId]);
+
+  const addMutation = useMutation({
+    mutationFn: async () => {
+      if (!clientName.trim()) throw new Error("Informe o nome do cliente.");
+      if (!serviceId) throw new Error("Selecione um serviço.");
+      const bId = selectedBarberId || barber?.id;
+      if (!bId) throw new Error("Barbeiro não identificado.");
+
+      const selectedService = services.find((s) => s.id === serviceId);
+      const duration = selectedService?.duration_min ?? 30;
+      const priceCents = selectedService?.price_cents ?? 0;
+
+      const [year, month, day] = date.split("-").map(Number);
+      const [hours, minutes] = (time || "12:00").split(":").map(Number);
+      const startDate = new Date(year, month - 1, day, hours, minutes);
+      const endDate = new Date(startDate.getTime() + duration * 60 * 1000);
+
+      const { error } = await supabase.from("appointments").insert({
+        barber_id: bId,
+        service_id: serviceId,
+        client_name: clientName.trim(),
+        client_phone: clientPhone.trim() || "(19) 00000-0000",
+        starts_at: startDate.toISOString(),
+        ends_at: endDate.toISOString(),
+        price_cents: priceCents,
+        status: "concluido",
+        notes: notes.trim() || "Atendimento balcão (Adicionado no painel)",
+      });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["barber-appointments"] });
+      queryClient.invalidateQueries({ queryKey: ["painel-appointments"] });
+      queryClient.invalidateQueries({ queryKey: ["clientes-appointments"] });
+      queryClient.invalidateQueries({ queryKey: ["site-data"] });
+      toast.success("Atendimento concluído adicionado e receita atualizada!");
+      onClose();
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Erro ao adicionar atendimento.");
+    },
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl space-y-5">
+        <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+          <div className="flex items-center gap-2 text-emerald-400">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+              <Plus className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white leading-tight">Adicionar Atendimento Realizado</h3>
+              <p className="text-xs text-zinc-400">Preencha os dados do atendimento concluído</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            addMutation.mutate();
+          }}
+          className="space-y-4 text-xs"
+        >
+          {/* Cliente Name */}
+          <div>
+            <label className="block font-semibold text-zinc-300 mb-1">Nome do Cliente *</label>
+            <input
+              type="text"
+              required
+              value={clientName}
+              onChange={(e) => setClientName(e.target.value)}
+              placeholder="Ex: João Silva"
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-white placeholder-zinc-500 focus:border-emerald-500/50 focus:outline-none"
+            />
+          </div>
+
+          {/* Telefone */}
+          <div>
+            <label className="block font-semibold text-zinc-300 mb-1">Telefone (Opcional)</label>
+            <input
+              type="text"
+              value={clientPhone}
+              onChange={(e) => setClientPhone(e.target.value)}
+              placeholder="Ex: (19) 99999-9999"
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-white placeholder-zinc-500 focus:border-emerald-500/50 focus:outline-none"
+            />
+          </div>
+
+          {/* Service & Barber Grid */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block font-semibold text-zinc-300 mb-1">Serviço Realizado *</label>
+              <select
+                value={serviceId}
+                onChange={(e) => setServiceId(e.target.value)}
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-white focus:border-emerald-500/50 focus:outline-none"
+              >
+                {services.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} (R$ {(s.price_cents / 100).toFixed(2).replace(".", ",")})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {role === "admin" && barbers.length > 0 ? (
+              <div>
+                <label className="block font-semibold text-zinc-300 mb-1">Barbeiro *</label>
+                <select
+                  value={selectedBarberId}
+                  onChange={(e) => setSelectedBarberId(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-white focus:border-emerald-500/50 focus:outline-none"
+                >
+                  {barbers.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+          </div>
+
+          {/* Date & Time */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-zinc-300 mb-1">Data *</label>
+              <input
+                type="date"
+                required
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-white focus:border-emerald-500/50 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-zinc-300 mb-1">Horário (Opcional)</label>
+              <input
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-white focus:border-emerald-500/50 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block font-semibold text-zinc-300 mb-1">Observação (Opcional)</label>
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Ex: Pagou em dinheiro no balcão"
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-white placeholder-zinc-500 focus:border-emerald-500/50 focus:outline-none"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 rounded-xl border border-zinc-700 bg-zinc-800 py-2.5 text-xs font-bold text-zinc-300 hover:bg-zinc-700"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={addMutation.isPending}
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-600/30 transition-all active:scale-95 disabled:opacity-50"
+            >
+              {addMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4" />
+                  Finalizar
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

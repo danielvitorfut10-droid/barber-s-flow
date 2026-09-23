@@ -166,7 +166,7 @@ function Home() {
               href={
                 site?.settings?.maps_url ||
                 `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                  `${site?.settings?.address || "Studio Blackout Campinas"}, Campinas - SP`
+                  `${site?.settings?.address || "Rua conselho das sociedades, 475 - Jd yeda"}, Campinas - SP`
                 )}`
               }
               target="_blank"
@@ -184,7 +184,7 @@ function Home() {
                   loading="lazy"
                   allowFullScreen
                   src={`https://maps.google.com/maps?q=${encodeURIComponent(
-                    `${site?.settings?.address || "Studio Blackout Campinas"}, Campinas - SP`
+                    site?.settings?.address || "Rua conselho das sociedades, 475 - Jd yeda"
                   )}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
                 />
               </div>
@@ -211,7 +211,7 @@ function Home() {
                     Endereço Principal
                   </span>
                   <p className="text-lg sm:text-xl font-bold text-white group-hover:text-[#39ff14] transition-colors leading-snug">
-                    {site?.settings?.address || "Endereço não cadastrado"}
+                    {site?.settings?.address || "Rua conselho das sociedades, 475 - Jd yeda"}
                   </p>
                 </div>
 
@@ -294,21 +294,24 @@ function getServiceDetails(name: string, customDesc?: string | null) {
   let desc = customDesc || "";
   let iconType = "hair";
 
-  if (lower.includes("barba") && !lower.includes("corte")) {
+  if (lower.includes("corte") && lower.includes("barba") && lower.includes("sobrancelha")) {
+    iconType = "combo";
+    if (!desc || desc.includes("ritual")) desc = "Combo completo de corte, barba e sobrancelha.";
+  } else if (lower.includes("barba") && !lower.includes("corte")) {
     iconType = "beard";
-    if (!desc) desc = "Barba terapia ou barba simples feita ao estilo tradicional com navalha, toalha quente e óleos essenciais para uma pele impecável.";
+    if (!desc || desc.includes("Barba terapia") || desc.includes("toalha quente")) desc = "barba com acabamento em navalha";
   } else if (lower.includes("sobrancelha") && !lower.includes("corte")) {
     iconType = "eyebrow";
-    if (!desc) desc = "Alinhamento de sobrancelha preciso para harmonizar o seu rosto com estilo e sofisticação.";
+    if (!desc) desc = "Design e limpeza de sobrancelha.";
   } else if (lower.includes("corte") && lower.includes("barba")) {
     iconType = "combo";
-    if (!desc) desc = "O combo completo para o homem moderno: corte de cabelo alinhado e barba impecável com ritual de toalha quente.";
+    if (!desc || desc.includes("ritual")) desc = "Combo completo de corte e barba.";
   } else if (lower.includes("corte") && lower.includes("sobrancelha")) {
     iconType = "combo-eyebrow";
-    if (!desc) desc = "Corte de cabelo completo com acabamento perfeito somado ao design de sobrancelha alinhado.";
+    if (!desc) desc = "Corte completo com design de sobrancelha.";
   } else if (lower.includes("corte")) {
     iconType = "hair";
-    if (!desc) desc = "Do clássico ao moderno, do social ao degradê, nossos profissionais são treinados para oferecer o melhor acabamento.";
+    if (!desc) desc = "Corte de cabelo completo com acabamento.";
   } else if (lower.includes("tintura") || lower.includes("pigment")) {
     iconType = "dye";
     if (!desc) desc = "Coloração e pigmentação de alta qualidade para revitalizar a cor e o estilo dos seus fios.";

@@ -60,23 +60,21 @@ export function SiteFooter() {
           </div>
 
           <div className="space-y-2 md:justify-self-end">
-            {settings?.address && (
-              <a
-                href={
-                  settings.maps_url ||
-                  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                    `${settings.address}, Campinas - SP`
-                  )}`
-                }
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground hover:underline group"
-                title="Ver no Google Maps"
-              >
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-red-500 transition-transform group-hover:scale-110" aria-hidden />
-                <span>{settings.address}</span>
-              </a>
-            )}
+            <a
+              href={
+                settings?.maps_url ||
+                `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                  `${settings?.address || "Rua conselho das sociedades, 475 - Jd yeda"}, Campinas - SP`
+                )}`
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground hover:underline group"
+              title="Ver no Google Maps"
+            >
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-red-500 transition-transform group-hover:scale-110" aria-hidden />
+              <span>{settings?.address || "Rua conselho das sociedades, 475 - Jd yeda"}</span>
+            </a>
             <nav className="flex flex-col pt-2 text-sm">
               <a href="/termos" className="py-1 text-muted-foreground hover:text-foreground">
                 Termos de uso

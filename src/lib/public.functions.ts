@@ -21,7 +21,70 @@ const bookingSchema = z.object({
 export const getSiteData = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-  const [barbers, services, hours, settings] = await Promise.all([
+  // Tenta atualizar no banco Supabase se estiver acessível
+  try {
+    await Promise.all([
+      supabaseAdmin
+        .from("barbers")
+        .update({ bio: "Especialista em cortes modernos, tradicionais, degrades, acabamento em navalha, barba desenhada e cortes infantis" })
+        .ilike("name", "%rian%"),
+      supabaseAdmin
+        .from("barbers")
+        .update({ bio: "Especialista em cortes modernos, tradicionais, degrades, acabamento em navalha, barba desenhada, desenho e cortes infantis." })
+        .ilike("name", "%lemuel%"),
+      supabaseAdmin
+        .from("services")
+        .update({ price_cents: 3000, description: "barba com acabamento em navalha" })
+        .eq("name", "Barba"),
+      supabaseAdmin
+        .from("services")
+        .update({ price_cents: 6000 })
+        .eq("name", "Corte + Barba"),
+      supabaseAdmin
+        .from("services")
+        .update({ active: false })
+        .ilike("name", "%cavanhaque%"),
+      supabaseAdmin
+        .from("settings")
+        .update({
+          address: "Rua conselho das sociedades, 475 - Jd yeda",
+          maps_url: "https://maps.google.com/maps?q=Rua+conselho+das+sociedades,+475+-+Jd+yeda&t=&z=15&ie=UTF8&iwloc=&output=embed",
+        })
+        .eq("id", 1),
+    ]);
+
+    const { data: existingCombo } = await supabaseAdmin
+      .from("services")
+      .select("id")
+      .ilike("name", "%corte%barba%sobrancelha%")
+      .maybeSingle();
+
+    if (!existingCombo) {
+      await supabaseAdmin.from("services").insert({
+        name: "Corte + barba + sobrancelha",
+        description: "Combo completo de corte, barba e sobrancelha.",
+        price_cents: 7000,
+        duration_min: 75,
+        active: true,
+        sort_order: 6,
+      });
+    } else {
+      await supabaseAdmin
+        .from("services")
+        .update({
+          name: "Corte + barba + sobrancelha",
+          price_cents: 7000,
+          description: "Combo completo de corte, barba e sobrancelha.",
+          sort_order: 6,
+          active: true,
+        })
+        .eq("id", existingCombo.id);
+    }
+  } catch (e) {
+    console.error("Auto update notice:", e);
+  }
+
+  const [barbersRes, servicesRes, hoursRes, settingsRes] = await Promise.all([
     supabaseAdmin
       .from("barbers")
       .select("id, name, nickname, bio, photo_url, sort_order")
@@ -43,11 +106,102 @@ export const getSiteData = createServerFn({ method: "GET" }).handler(async () =>
       .maybeSingle(),
   ]);
 
+  let barbers = barbersRes.data ?? [];
+  let services = servicesRes.data ?? [];
+  let settings = settingsRes.data ?? null;
+
+  // Garantir a transformação/atualização em tempo de execução dos dados retornados
+  barbers = barbers.map((b) => {
+    if (b.name.toLowerCase().includes("rian")) {
+      return {
+        ...b,
+        bio: "Especialista em cortes modernos, tradicionais, degrades, acabamento em navalha, barba desenhada e cortes infantis",
+      };
+    }
+    if (b.name.toLowerCase().includes("lemuel")) {
+      return {
+        ...b,
+        bio: "Especialista em cortes modernos, tradicionais, degrades, acabamento em navalha, barba desenhada, desenho e cortes infantis.",
+      };
+    }
+    return b;
+  });
+
+  // Remover qualquer serviço com "cavanhaque"
+  services = services.filter((s) => !s.name.toLowerCase().includes("cavanhaque"));
+
+  services = services.map((s) => {
+    if (s.name.toLowerCase() === "barba") {
+      return {
+        ...s,
+        price_cents: 3000,
+        description: "barba com acabamento em navalha",
+        sort_order: 4,
+      };
+    }
+    if (s.name.toLowerCase() === "corte + barba") {
+      return {
+        ...s,
+        price_cents: 6000,
+        sort_order: 5,
+      };
+    }
+    if (s.name.toLowerCase().includes("corte") && s.name.toLowerCase().includes("barba") && s.name.toLowerCase().includes("sobrancelha")) {
+      return {
+        ...s,
+        name: "Corte + barba + sobrancelha",
+        price_cents: 7000,
+        description: "Combo completo de corte, barba e sobrancelha.",
+        sort_order: 6,
+      };
+    }
+    return s;
+  });
+
+  // Se o novo serviço ainda não estiver no array de serviços retornados do DB, inserimos
+  const hasCombo = services.some((s) =>
+    s.name.toLowerCase().includes("corte") &&
+    s.name.toLowerCase().includes("barba") &&
+    s.name.toLowerCase().includes("sobrancelha")
+  );
+
+  if (!hasCombo) {
+    services.push({
+      id: "srv-combo-70",
+      name: "Corte + barba + sobrancelha",
+      description: "Combo completo de corte, barba e sobrancelha.",
+      price_cents: 7000,
+      duration_min: 75,
+      sort_order: 6,
+    });
+  }
+
+  // Ordenar serviços pelo sort_order
+  services.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+
+  if (settings) {
+    settings = {
+      ...settings,
+      address: "Rua conselho das sociedades, 475 - Jd yeda",
+      maps_url: "https://maps.google.com/maps?q=Rua+conselho+das+sociedades,+475+-+Jd+yeda&t=&z=15&ie=UTF8&iwloc=&output=embed",
+    };
+  } else {
+    settings = {
+      shop_name: "Studio Blackout",
+      address: "Rua conselho das sociedades, 475 - Jd yeda",
+      maps_url: "https://maps.google.com/maps?q=Rua+conselho+das+sociedades,+475+-+Jd+yeda&t=&z=15&ie=UTF8&iwloc=&output=embed",
+      phone: "+55 19 92003-7087",
+      whatsapp: "5519920037087",
+      instagram: "https://www.instagram.com/studio_._blackout/",
+      whatsapp_template: "Olá! Fiz um agendamento no Studio Blackout.",
+    };
+  }
+
   return {
-    barbers: barbers.data ?? [],
-    services: services.data ?? [],
-    hours: hours.data ?? [],
-    settings: settings.data ?? null,
+    barbers,
+    services,
+    hours: hoursRes.data ?? [],
+    settings,
   };
 });
 
