@@ -20,24 +20,24 @@ const bookingSchema = z.object({
 });
 
 export const getSiteData = createServerFn({ method: "GET" }).handler(async () => {
-  const supabaseAdmin = publicClient();
+  const db = publicClient();
 
   const [barbers, services, hours, settings] = await Promise.all([
-    supabaseAdmin
+    db
       .from("barbers")
       .select("id, name, nickname, bio, photo_url, sort_order")
       .eq("active", true)
       .order("sort_order"),
-    supabaseAdmin
+    db
       .from("services")
       .select("id, name, description, price_cents, duration_min, sort_order")
       .eq("active", true)
       .order("sort_order"),
-    supabaseAdmin
+    db
       .from("business_hours")
       .select("weekday, open_time, close_time, closed")
       .order("weekday"),
-    supabaseAdmin
+    db
       .from("settings")
       .select("shop_name, address, maps_url, phone, whatsapp, instagram, whatsapp_template")
       .eq("id", 1)
@@ -55,26 +55,26 @@ export const getSiteData = createServerFn({ method: "GET" }).handler(async () =>
 export const getAvailability = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => availabilitySchema.parse(data))
   .handler(async ({ data }) => {
-    const supabaseAdmin = publicClient();
+    const db = publicClient();
 
     const [{ data: service }, { data: hour }, { data: settings }] = await Promise.all([
-      supabaseAdmin
+      db
         .from("services")
         .select("duration_min")
         .eq("id", data.serviceId)
         .maybeSingle(),
-      supabaseAdmin
+      db
         .from("business_hours")
         .select("open_time, close_time, closed")
         .eq("weekday", weekdayOf(data.date))
         .maybeSingle(),
-      supabaseAdmin.from("settings").select("slot_interval_min").eq("id", 1).maybeSingle(),
+      db.from("settings").select("slot_interval_min").eq("id", 1).maybeSingle(),
     ]);
 
     if (!service || !hour || hour.closed) return { slots: [] as { time: string; iso: string }[] };
 
     const range = dayRange(data.date);
-    const { data: busyRows } = await supabaseAdmin.rpc("get_public_busy", {
+    const { data: busyRows } = await db.rpc("get_public_busy", {
       _barber_id: data.barberId,
       _start: range.start,
       _end: range.end,
