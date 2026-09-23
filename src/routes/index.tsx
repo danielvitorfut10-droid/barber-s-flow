@@ -54,7 +54,7 @@ function Home() {
 
         <div className="relative mx-auto flex max-w-4xl flex-col items-center text-center px-4 py-32 md:py-44 z-10">
           <h1 className="max-w-3xl font-display text-4xl font-extrabold leading-[1.1] tracking-tight md:text-6xl text-white drop-shadow-lg">
-            Seu horário. Seu corte. Sem espera.
+            Seu corte, Sua experiência<br />Sem burocracia!
           </h1>
           <div className="mt-8 flex justify-center">
             <Button size="lg" onClick={openBooking} className="px-8 py-6 text-base font-semibold shadow-2xl">

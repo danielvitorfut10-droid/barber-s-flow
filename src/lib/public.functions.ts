@@ -22,7 +22,7 @@ const bookingSchema = z.object({
 export const getSiteData = createServerFn({ method: "GET" }).handler(async () => {
   const db = publicClient();
 
-  const [barbers, services, hours, settings] = await Promise.all([
+  const [barbersRes, servicesRes, hoursRes, settingsRes] = await Promise.all([
     db
       .from("barbers")
       .select("id, name, nickname, bio, photo_url, sort_order")
