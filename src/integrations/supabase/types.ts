@@ -418,7 +418,27 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_public_booking: {
+        Args: {
+          _barber_id: string
+          _label: string
+          _name: string
+          _notes: string
+          _phone: string
+          _service_id: string
+          _starts_at: string
+        }
+        Returns: Json
+      }
       current_barber_id: { Args: never; Returns: string }
+      get_public_busy: {
+        Args: { _barber_id: string; _end: string; _start: string }
+        Returns: {
+          ends_at: string
+          kind: string
+          starts_at: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
