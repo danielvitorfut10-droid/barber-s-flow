@@ -12,4 +12,7 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // On Vercel builds (VERCEL env is set automatically), target Vercel's runtime.
+  // Lovable builds ignore this and keep their own preset.
+  ...(process.env.VERCEL ? { nitro: { preset: "vercel" } } : {}),
 });
