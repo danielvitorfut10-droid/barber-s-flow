@@ -104,6 +104,19 @@ function PainelPage() {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
+  // Disable pinch/double-tap zoom on mobile while the panel is open
+  useEffect(() => {
+    const viewport = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+    const original = viewport?.getAttribute("content") ?? null;
+    viewport?.setAttribute(
+      "content",
+      "width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover",
+    );
+    return () => {
+      if (viewport && original !== null) viewport.setAttribute("content", original);
+    };
+  }, []);
+
   // Close user menu on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
