@@ -36,7 +36,8 @@ export function buildSlots(params: {
   const { dateStr, openTime, intervalMin, durationMin, busy } = params;
   const unblockedStarts = params.unblockedStarts ?? params.unblockedNightStarts ?? [];
   const now = params.now ?? new Date();
-  const minStart = now.getTime() + 30 * 60 * 1000;
+  // Antecedência mínima de 10 minutos para agendamentos no mesmo dia
+  const minStart = now.getTime() + 10 * 60 * 1000;
 
   const open = minutesOf(openTime);
   // Start loop from 06:00 AM (360 min) or open time, whichever is earlier

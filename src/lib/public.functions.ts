@@ -105,7 +105,7 @@ export const getSiteData = createServerFn({ method: "GET" }).handler(async () =>
 
   if (!hasCombo) {
     services.push({
-      id: "srv-combo-70",
+      id: "00000000-0000-0000-0000-000000000070",
       name: "Corte + barba + sobrancelha",
       description: "Combo completo de corte, barba e sobrancelha.",
       price_cents: 7000,

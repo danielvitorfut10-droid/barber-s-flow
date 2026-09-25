@@ -22,7 +22,7 @@ import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { formatBRL, formatDateLong, formatDuration, maskPhone, toDateKey } from "@/lib/format";
+import { formatBRL, formatDateLong, formatDuration, getTodayDateKey, maskPhone, toDateKey } from "@/lib/format";
 import { siteQueryOptions } from "@/lib/queries";
 import { getAvailability, createBooking } from "@/lib/public.functions";
 import { buildWhatsappLink } from "./whatsapp";
@@ -72,14 +72,15 @@ export function BookingModal({ open, onOpenChange }: Props) {
   );
 
   const isDateDisabled = (d: Date) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const dKey = toDateKey(d);
+    const todayKey = getTodayDateKey();
 
-    if (d < today) return true;
+    if (dKey < todayKey) return true;
 
     const maxDate = new Date();
-    maxDate.setDate(today.getDate() + 30);
-    if (d > maxDate) return true;
+    maxDate.setDate(maxDate.getDate() + 30);
+    const maxKey = toDateKey(maxDate);
+    if (dKey > maxKey) return true;
 
     const weekday = d.getDay();
     return closedWeekdays.has(weekday);
@@ -112,11 +113,9 @@ export function BookingModal({ open, onOpenChange }: Props) {
     onSuccess: (result) => {
       if (!result.ok) {
         toast.error(result.error);
-        if (result.error.includes("reservado")) {
-          setTime(null);
-          setStep(3);
-          slotsQuery.refetch();
-        }
+        setTime(null);
+        setStep(3);
+        slotsQuery.refetch();
         return;
       }
       const url = buildWhatsappLink({

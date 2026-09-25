@@ -16,15 +16,24 @@ export function toIso(dateStr: string, timeStr: string) {
   return `${dateStr}T${timeStr}:00${TZ_OFFSET}`;
 }
 
-/** Data local (Brasília) no formato YYYY-MM-DD. */
+/** Converte objeto Date do calendário para chave YYYY-MM-DD imune a fuso horário. */
 export function toDateKey(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/** Retorna a data de HOJE no fuso de Brasília (YYYY-MM-DD). */
+export function getTodayDateKey() {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Sao_Paulo",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(date);
+  }).format(new Date());
 }
+
 
 export function formatTime(iso: string) {
   return new Intl.DateTimeFormat("pt-BR", {
