@@ -104,6 +104,19 @@ function PainelPage() {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
+  // Disable pinch/double-tap zoom on mobile while the panel is open
+  useEffect(() => {
+    const viewport = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+    const original = viewport?.getAttribute("content") ?? null;
+    viewport?.setAttribute(
+      "content",
+      "width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover",
+    );
+    return () => {
+      if (viewport && original !== null) viewport.setAttribute("content", original);
+    };
+  }, []);
+
   // Close user menu on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -1501,10 +1514,26 @@ function AddAppointmentModal({
       const duration = selectedService?.duration_min ?? 30;
       const priceCents = selectedService?.price_cents ?? 0;
 
-      const [year, month, day] = date.split("-").map(Number);
-      const [hours, minutes] = (time || "12:00").split(":").map(Number);
-      const startDate = new Date(year, month - 1, day, hours, minutes);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Informe uma data válida.");
+      const hhmm = (time || "12:00").slice(0, 5);
+      const startDate = new Date(`${date}T${hhmm}:00-03:00`);
+      if (Number.isNaN(startDate.getTime())) throw new Error("Informe um horário válido.");
       const endDate = new Date(startDate.getTime() + duration * 60 * 1000);
+
+      const { data: conflicts } = await supabase
+        .from("appointments")
+        .select("id, starts_at, ends_at")
+        .eq("barber_id", bId)
+        .neq("status", "cancelado")
+        .lt("starts_at", endDate.toISOString())
+        .gt("ends_at", startDate.toISOString())
+        .limit(1);
+      if (conflicts && conflicts.length > 0) {
+        const c = conflicts[0];
+        throw new Error(
+          `Já existe um atendimento das ${format(parseISO(c.starts_at), "HH:mm")} às ${format(parseISO(c.ends_at), "HH:mm")} nesse horário. Escolha outro horário.`,
+        );
+      }
 
       const { error } = await supabase.from("appointments").insert({
         barber_id: bId,
@@ -1518,7 +1547,10 @@ function AddAppointmentModal({
         notes: notes.trim() || "Atendimento balcão (Adicionado no painel)",
       });
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === "23P01") throw new Error("Esse horário já está ocupado. Escolha outro horário.");
+        throw new Error("Não foi possível salvar o atendimento. Tente novamente.");
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["barber-appointments"] });

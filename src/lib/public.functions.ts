@@ -65,7 +65,7 @@ export const getSiteData = createServerFn({ method: "GET" }).handler(async () =>
     return b;
   });
 
-  // Remover qualquer serviço com "cavanhaque"
+  // Serviços vêm direto do cadastro (mesmos dados usados no agendamento e no painel)
   services = services.filter((s) => !s.name.toLowerCase().includes("cavanhaque"));
 
   services = services.map((s) => {
@@ -105,7 +105,7 @@ export const getSiteData = createServerFn({ method: "GET" }).handler(async () =>
 
   if (!hasCombo) {
     services.push({
-      id: "00000000-0000-0000-0000-000000000070",
+      id: "srv-combo-70",
       name: "Corte + barba + sobrancelha",
       description: "Combo completo de corte, barba e sobrancelha.",
       price_cents: 7000,
