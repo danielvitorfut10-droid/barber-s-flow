@@ -65,57 +65,8 @@ export const getSiteData = createServerFn({ method: "GET" }).handler(async () =>
     return b;
   });
 
-  // Remover qualquer serviço com "cavanhaque"
+  // Serviços vêm direto do cadastro (mesmos dados usados no agendamento e no painel)
   services = services.filter((s) => !s.name.toLowerCase().includes("cavanhaque"));
-
-  services = services.map((s) => {
-    if (s.name.toLowerCase() === "barba") {
-      return {
-        ...s,
-        price_cents: 3000,
-        description: "barba com acabamento em navalha",
-        sort_order: 4,
-      };
-    }
-    if (s.name.toLowerCase() === "corte + barba") {
-      return {
-        ...s,
-        price_cents: 6000,
-        sort_order: 5,
-      };
-    }
-    if (s.name.toLowerCase().includes("corte") && s.name.toLowerCase().includes("barba") && s.name.toLowerCase().includes("sobrancelha")) {
-      return {
-        ...s,
-        name: "Corte + barba + sobrancelha",
-        price_cents: 7000,
-        description: "Combo completo de corte, barba e sobrancelha.",
-        sort_order: 6,
-      };
-    }
-    return s;
-  });
-
-  // Se o novo serviço ainda não estiver no array de serviços retornados do DB, inserimos
-  const hasCombo = services.some((s) =>
-    s.name.toLowerCase().includes("corte") &&
-    s.name.toLowerCase().includes("barba") &&
-    s.name.toLowerCase().includes("sobrancelha")
-  );
-
-  if (!hasCombo) {
-    services.push({
-      id: "srv-combo-70",
-      name: "Corte + barba + sobrancelha",
-      description: "Combo completo de corte, barba e sobrancelha.",
-      price_cents: 7000,
-      duration_min: 75,
-      sort_order: 6,
-    });
-  }
-
-  // Ordenar serviços pelo sort_order
-  services.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
   if (settings) {
     settings = {
