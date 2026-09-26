@@ -180,7 +180,7 @@ export const getAvailability = createServerFn({ method: "POST" })
       dateStr: data.date,
       openTime: String(hour.open_time).slice(0, 5),
       closeTime: String(hour.close_time).slice(0, 5),
-      intervalMin: settings?.slot_interval_min ?? 30,
+      intervalMin: 60,
       durationMin: service.duration_min,
       busy: toIntervals(busy),
       unblockedNightStarts,

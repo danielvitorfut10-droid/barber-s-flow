@@ -780,7 +780,7 @@ function AgendamentosTab({
     const hours = businessHours?.find((h) => h.weekday === weekday);
     if (!hours || hours.closed) return [];
 
-    const interval = settings?.slot_interval_min ?? 30;
+    const interval = 60;
     const [openH] = hours.open_time.slice(0, 5).split(":").map(Number);
 
     const slots: { time: string; iso: string; isNight: boolean; isEarly: boolean }[] = [];
@@ -948,12 +948,12 @@ function AgendamentosTab({
                 return (
                   <>
                     <p className="mb-5 text-xs text-zinc-500">
-                      06:00 – 00:00
+                      06:00 – 00:00 • Intervalos de 1 em 1 hora
                     </p>
                     <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
                       {selectedDaySlots.map((slot) => {
                         const slotDate = new Date(slot.iso);
-                        const slotEnd = new Date(slotDate.getTime() + (settings?.slot_interval_min ?? 30) * 60 * 1000);
+                        const slotEnd = new Date(slotDate.getTime() + 60 * 60 * 1000);
 
                         // Check appointment
                         const appt = appointments.find((a) => {
