@@ -60,7 +60,9 @@ export function buildSlots(params: {
       if (!isUnblocked) continue;
     }
 
-    const conflict = busy.some((b) => start < b.end && end > b.start);
+    // Bloqueia apenas o horário exatamente selecionado (mesmo início),
+    // sem derrubar os horários seguintes.
+    const conflict = busy.some((b) => Math.abs(b.start - start) < 60000);
     if (!conflict) slots.push({ time, iso });
   }
 
