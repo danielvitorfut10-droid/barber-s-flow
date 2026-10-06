@@ -230,7 +230,9 @@ export function BookingModal({ open, onOpenChange }: Props) {
 
               {step === 1 && (
                 <div className="flex flex-col gap-2.5">
-                  {(site?.services ?? []).map((s) => (
+                  {(site?.services ?? [])
+                    .filter((s) => s.name.trim().toLowerCase() !== "sobrancelha")
+                    .map((s) => (
                     <button
                       key={s.id}
                       type="button"

@@ -35,6 +35,10 @@ import {
   AlertTriangle,
   Phone,
   Plus,
+  Pencil,
+  Trash2,
+  ShoppingBag,
+  Receipt,
 } from "lucide-react";
 import {
   format,
@@ -73,8 +77,19 @@ export const Route = createFileRoute("/painel")({
 // ─────────────────────────────────────────────
 type Tab = "receita" | "agendamentos" | "clientes";
 
+interface Expense {
+  id: string;
+  barber_id: string;
+  item_name: string;
+  amount_cents: number;
+  expense_date: string;
+  notes?: string | null;
+  created_at: string;
+}
+
 interface Appointment {
   id: string;
+  service_id?: string | null;
   client_name: string;
   client_phone: string;
   starts_at: string;
@@ -102,6 +117,7 @@ function PainelPage() {
   const [activeTab, setActiveTab] = useState<Tab>("receita");
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [gastosModalOpen, setGastosModalOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   // Disable pinch/double-tap zoom on mobile while the panel is open
@@ -208,7 +224,7 @@ function PainelPage() {
             )}
           </div>
 
-          {/* Center/Right: Tabs & Green Adicionar Button */}
+          {/* Center/Right: Tabs, Red Gastos Button & Green Adicionar Button */}
           <div className="flex items-center gap-2 sm:gap-3">
             <nav className="flex gap-1 sm:gap-2">
               <TabButton active={activeTab === "receita"} onClick={() => setActiveTab("receita")}>
@@ -225,6 +241,18 @@ function PainelPage() {
               </TabButton>
             </nav>
 
+            {/* Red: Gastos da Barbearia */}
+            <button
+              id="admin-expenses-btn"
+              onClick={() => setGastosModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold px-3 py-1.5 sm:px-4 sm:py-2 text-xs shadow-lg shadow-red-600/20 active:scale-95 transition-all"
+              title="Gastos da Barbearia"
+            >
+              <Receipt className="h-4 w-4" />
+              <span className="hidden sm:inline">Gastos</span>
+            </button>
+
+            {/* Green: Adicionar Atendimento */}
             <button
               id="admin-add-appointment-btn"
               onClick={() => setAddModalOpen(true)}
@@ -249,6 +277,14 @@ function PainelPage() {
           barber={barber}
           role={role}
           onClose={() => setAddModalOpen(false)}
+        />
+      )}
+
+      {gastosModalOpen && (
+        <GastosModal
+          barber={barber}
+          role={role}
+          onClose={() => setGastosModalOpen(false)}
         />
       )}
     </div>
@@ -451,6 +487,9 @@ function MiniCalendarPicker({
 // ─────────────────────────────────────────────
 // Receita Tab
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Receita Tab
+// ─────────────────────────────────────────────
 function ReceitaTab({
   barber,
   role,
@@ -466,7 +505,8 @@ function ReceitaTab({
     to: endOfDay(endOfMonth(now)),
   });
 
-  const { data: appointments = [], isLoading } = useQuery({
+  // Fetch appointments from Supabase
+  const { data: appointments = [], isLoading: isLoadingAppts } = useQuery({
     queryKey: ["barber-appointments", barber?.id, role],
     queryFn: async () => {
       let q = supabase
@@ -475,7 +515,6 @@ function ReceitaTab({
         .neq("status", "cancelado")
         .order("starts_at", { ascending: false });
 
-      // Cada barbeiro admin acessa exclusivamente os seus próprios agendamentos
       if (barber?.id) {
         q = q.eq("barber_id", barber.id);
       }
@@ -486,22 +525,59 @@ function ReceitaTab({
     enabled: role !== null && !!barber?.id,
   });
 
-  // Filter by selected date range
+  // Fetch expenses from Supabase
+  const { data: expenses = [] } = useQuery({
+    queryKey: ["expenses-receita", barber?.id, role],
+    queryFn: async () => {
+      let q = supabase
+        .from("expenses")
+        .select("id, barber_id, item_name, amount_cents, expense_date");
+      if (barber?.id) {
+        q = q.eq("barber_id", barber.id);
+      }
+      const { data, error } = await q;
+      if (error) return [];
+      return (data ?? []) as Expense[];
+    },
+    enabled: role !== null && !!barber?.id,
+  });
+
+  // Filter appointments by selected date range
   const filtered = appointments.filter((a) => {
     const d = parseISO(a.starts_at);
     return d >= dateRange.from && d <= dateRange.to;
   });
 
-  const totalCents = filtered.reduce((s, a) => s + a.price_cents, 0);
+  const rawTotalCents = filtered.reduce((s, a) => s + a.price_cents, 0);
   const totalCount = filtered.length;
-  const avgCents = totalCount > 0 ? Math.round(totalCents / totalCount) : 0;
 
-  // Chart: all days in selected range (up to 31)
+  const todayAppointments = appointments.filter((a) => isToday(parseISO(a.starts_at)));
+  const rawTodayCents = todayAppointments.reduce((s, a) => s + a.price_cents, 0);
+
+  // Range and today expenses
+  const rangeExpenses = expenses.filter((e) => {
+    const d = parseISO(e.expense_date);
+    return d >= dateRange.from && d <= dateRange.to;
+  });
+  const rangeExpensesCents = rangeExpenses.reduce((s, e) => s + e.amount_cents, 0);
+
+  const todayExpenses = expenses.filter((e) => isToday(parseISO(e.expense_date)));
+  const todayExpensesCents = todayExpenses.reduce((s, e) => s + e.amount_cents, 0);
+
+  // Net Revenue (subtracting expenses)
+  const netTotalCents = Math.max(0, rawTotalCents - rangeExpensesCents);
+  const netTodayCents = Math.max(0, rawTodayCents - todayExpensesCents);
+
+  // Chart: all days in selected range
   const rangeDays = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
   const chartDays = rangeDays.map((d) => {
     const label = format(d, "dd/MM");
     const dayAppts = appointments.filter((a) => isSameDay(parseISO(a.starts_at), d));
-    return { label, receita: dayAppts.reduce((s, a) => s + a.price_cents / 100, 0), count: dayAppts.length };
+    const dayApptsCents = dayAppts.reduce((s, a) => s + a.price_cents, 0);
+    const dayExp = expenses.filter((e) => isSameDay(parseISO(e.expense_date), d));
+    const dayExpCents = dayExp.reduce((s, e) => s + e.amount_cents, 0);
+    const netDayCents = Math.max(0, dayApptsCents - dayExpCents);
+    return { label, receita: netDayCents / 100, count: dayAppts.length };
   });
 
   const periodLabel = isSameDay(dateRange.from, dateRange.to)
@@ -530,8 +606,8 @@ function ReceitaTab({
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-3">
         <SummaryCard
-          label="Receita"
-          value={formatBRL(totalCents)}
+          label="Receita Líquida"
+          value={formatBRL(netTotalCents)}
           icon={<DollarSign className="h-5 w-5" />}
           accent
         />
@@ -541,8 +617,8 @@ function ReceitaTab({
           icon={<Users className="h-5 w-5" />}
         />
         <SummaryCard
-          label="Ticket Médio"
-          value={formatBRL(avgCents)}
+          label="Receita do Dia"
+          value={formatBRL(netTodayCents)}
           icon={<TrendingUp className="h-5 w-5" />}
         />
       </div>
@@ -552,7 +628,7 @@ function ReceitaTab({
         <h2 className="mb-5 text-xs font-semibold uppercase tracking-wide text-zinc-400 sm:text-sm">
           Receita por dia — {periodLabel}
         </h2>
-        {isLoading ? (
+        {isLoadingAppts ? (
           <div className="flex h-48 items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-[#39ff14]" />
           </div>
@@ -570,7 +646,7 @@ function ReceitaTab({
               <Tooltip
                 cursor={{ fill: "rgba(57,255,20,0.05)" }}
                 contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, color: "#fff" }}
-                formatter={(v: number) => [`R$ ${v.toFixed(2)}`, "Receita"]}
+                formatter={(v: number) => [`R$ ${v.toFixed(2)}`, "Receita Líquida"]}
               />
               <Bar dataKey="receita" fill="#39ff14" radius={[6, 6, 0, 0]} maxBarSize={48} />
             </BarChart>
@@ -583,7 +659,7 @@ function ReceitaTab({
         <h2 className="mb-5 text-sm font-semibold uppercase tracking-wide text-zinc-400">
           Últimos Atendimentos
         </h2>
-        {isLoading ? (
+        {isLoadingAppts ? (
           <div className="flex h-24 items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-[#39ff14]" />
           </div>
@@ -664,6 +740,356 @@ function StatusBadge({ status }: { status: string }) {
   const s = map[status] ?? { label: status, cls: "text-zinc-400" };
   return <p className={`text-xs font-medium ${s.cls}`}>{s.label}</p>;
 }
+
+// ─────────────────────────────────────────────
+// Modal: Gastos da Barbearia (Supabase DB)
+// ─────────────────────────────────────────────
+function GastosModal({
+  barber,
+  role,
+  onClose,
+}: {
+  barber: { id: string; name?: string } | null;
+  role: string | null;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+
+  // Form state
+  const [itemName, setItemName] = useState("");
+  const [amountInput, setAmountInput] = useState("");
+  const [expenseDate, setExpenseDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [notes, setNotes] = useState("");
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Month filter
+  const [filterMonth, setFilterMonth] = useState(format(new Date(), "yyyy-MM"));
+
+  // Barbers list (for admin)
+  const { data: barbers = [] } = useQuery({
+    queryKey: ["active-barbers-gastos"],
+    queryFn: async () => {
+      const { data } = await supabase.from("barbers").select("id, name").eq("active", true).order("sort_order");
+      return data ?? [];
+    },
+    enabled: role === "admin",
+  });
+  const [selectedBarberId, setSelectedBarberId] = useState(barber?.id ?? "");
+  useEffect(() => {
+    if (!selectedBarberId && barber?.id) setSelectedBarberId(barber.id);
+    else if (!selectedBarberId && barbers.length > 0) setSelectedBarberId(barbers[0].id);
+  }, [barber, barbers, selectedBarberId]);
+
+  const targetBarberId = role === "admin" ? selectedBarberId : barber?.id;
+
+  // Fetch expenses for the chosen month from Supabase
+  const { data: expenses = [], isLoading } = useQuery({
+    queryKey: ["expenses", targetBarberId, filterMonth],
+    queryFn: async () => {
+      if (!targetBarberId) return [];
+      const from = `${filterMonth}-01`;
+      const lastDay = new Date(parseInt(filterMonth.split("-")[0]), parseInt(filterMonth.split("-")[1]), 0).getDate();
+      const to = `${filterMonth}-${String(lastDay).padStart(2, "0")}`;
+      const { data, error } = await supabase
+        .from("expenses")
+        .select("*")
+        .eq("barber_id", targetBarberId)
+        .gte("expense_date", from)
+        .lte("expense_date", to)
+        .order("expense_date", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Expense[];
+    },
+    enabled: !!targetBarberId,
+  });
+
+  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount_cents, 0);
+
+  function resetForm() {
+    setItemName("");
+    setAmountInput("");
+    setExpenseDate(format(new Date(), "yyyy-MM-dd"));
+    setNotes("");
+    setEditingExpense(null);
+  }
+
+  function startEdit(exp: Expense) {
+    setEditingExpense(exp);
+    setItemName(exp.item_name);
+    setAmountInput((exp.amount_cents / 100).toFixed(2).replace(".", ","));
+    setExpenseDate(exp.expense_date);
+    setNotes(exp.notes ?? "");
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (!itemName.trim()) throw new Error("Informe o nome do item.");
+      const cleanAmt = amountInput.replace(/[^\d,.]/g, "").replace(",", ".");
+      const parsedAmt = parseFloat(cleanAmt);
+      if (Number.isNaN(parsedAmt) || parsedAmt < 0) throw new Error("Informe um valor válido.");
+      const amountCents = Math.round(parsedAmt * 100);
+      const bId = targetBarberId;
+      if (!bId) throw new Error("Barbeiro não identificado.");
+
+      if (editingExpense) {
+        const { error } = await supabase
+          .from("expenses")
+          .update({
+            item_name: itemName.trim(),
+            amount_cents: amountCents,
+            expense_date: expenseDate,
+            notes: notes.trim() || null,
+          })
+          .eq("id", editingExpense.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("expenses").insert({
+          barber_id: bId,
+          item_name: itemName.trim(),
+          amount_cents: amountCents,
+          expense_date: expenseDate,
+          notes: notes.trim() || null,
+        });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["expenses-receita"] });
+      toast.success(editingExpense ? "Gasto atualizado!" : "Gasto registrado!");
+      resetForm();
+    },
+    onError: (err: any) => toast.error(err?.message || "Erro ao salvar gasto."),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("expenses").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["expenses-receita"] });
+      setDeletingId(null);
+      toast.success("Gasto removido.");
+    },
+    onError: (err: any) => toast.error(err?.message || "Erro ao remover gasto."),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/80 p-2 pt-4 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
+      <div className="w-full max-w-2xl rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl mb-4">
+
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-600/10 border border-red-600/20">
+              <Receipt className="h-5 w-5 text-red-400" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-white">Gastos da Barbearia</h2>
+              <p className="text-xs text-zinc-400">Registre e gerencie as despesas no banco de dados</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+
+          {/* Filters row */}
+          <div className="flex flex-wrap gap-3">
+            <div>
+              <label className="block text-[11px] font-semibold text-zinc-400 mb-1">Mês</label>
+              <input
+                type="month"
+                value={filterMonth}
+                onChange={(e) => setFilterMonth(e.target.value)}
+                className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white focus:border-red-500/50 focus:outline-none"
+              />
+            </div>
+            {role === "admin" && barbers.length > 0 && (
+              <div>
+                <label className="block text-[11px] font-semibold text-zinc-400 mb-1">Barbeiro</label>
+                <select
+                  value={selectedBarberId}
+                  onChange={(e) => setSelectedBarberId(e.target.value)}
+                  className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white focus:border-red-500/50 focus:outline-none"
+                >
+                  {barbers.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="ml-auto flex items-end">
+              <div className="rounded-xl bg-red-600/10 border border-red-600/20 px-4 py-2 text-right">
+                <p className="text-[10px] text-zinc-400 uppercase tracking-wide font-semibold">Total Gastos</p>
+                <p className="text-lg font-extrabold text-red-400">{formatBRL(totalExpenses)}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Add / Edit form */}
+          <form
+            onSubmit={(e) => { e.preventDefault(); saveMutation.mutate(); }}
+            className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 space-y-3"
+          >
+            <p className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
+              <ShoppingBag className="h-3.5 w-3.5 text-red-400" />
+              {editingExpense ? "Editar Gasto" : "Novo Gasto"}
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-semibold text-zinc-400 mb-1">Nome do Item *</label>
+                <input
+                  type="text"
+                  required
+                  value={itemName}
+                  onChange={(e) => setItemName(e.target.value)}
+                  placeholder="Ex: Produto de higiene, Aluguel, Equipamento..."
+                  className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-red-500/50 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-zinc-400 mb-1">Valor (R$) *</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2 text-zinc-400 font-bold text-sm">R$</span>
+                  <input
+                    type="text"
+                    required
+                    value={amountInput}
+                    onChange={(e) => setAmountInput(e.target.value)}
+                    placeholder="0,00"
+                    className="w-full rounded-xl border border-zinc-700 bg-zinc-900 py-2 pl-10 pr-3 text-sm font-bold text-white focus:border-red-500/50 focus:outline-none"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-zinc-400 mb-1">Data *</label>
+                <input
+                  type="date"
+                  required
+                  value={expenseDate}
+                  onChange={(e) => setExpenseDate(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-red-500/50 focus:outline-none"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-semibold text-zinc-400 mb-1">Observação (Opcional)</label>
+                <input
+                  type="text"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Ex: Nota fiscal #123"
+                  className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-red-500/50 focus:outline-none"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              {editingExpense && (
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2 text-xs font-bold text-zinc-300 hover:bg-zinc-700"
+                >
+                  Cancelar Edição
+                </button>
+              )}
+              <button
+                type="submit"
+                disabled={saveMutation.isPending}
+                className="flex items-center gap-1.5 rounded-xl bg-red-600 hover:bg-red-500 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-red-600/20 active:scale-95 transition-all disabled:opacity-50 ml-auto"
+              >
+                {saveMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                {editingExpense ? "Salvar Alterações" : "Adicionar Gasto"}
+              </button>
+            </div>
+          </form>
+
+          {/* Expenses list */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">
+              Gastos do mês ({expenses.length})
+            </p>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-red-400" />
+              </div>
+            ) : expenses.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-8 text-zinc-500">
+                <Receipt className="h-8 w-8 opacity-30" />
+                <p className="text-sm">Nenhum gasto registrado neste mês.</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                {expenses.map((exp) => (
+                  <div
+                    key={exp.id}
+                    className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3"
+                  >
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-600/10 border border-red-600/20">
+                      <ShoppingBag className="h-4 w-4 text-red-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-white truncate">{exp.item_name}</p>
+                      <p className="text-[11px] text-zinc-500">
+                        {format(parseISO(exp.expense_date), "dd/MM/yyyy")}
+                        {exp.notes && <span className="ml-2 text-zinc-600">• {exp.notes}</span>}
+                      </p>
+                    </div>
+                    <p className="text-sm font-extrabold text-red-400 shrink-0">
+                      -{formatBRL(exp.amount_cents)}
+                    </p>
+                    <div className="flex gap-1 shrink-0">
+                      <button
+                        title="Editar"
+                        onClick={() => startEdit(exp)}
+                        className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-[#39ff14] transition-colors"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      {deletingId === exp.id ? (
+                        <div className="flex gap-1">
+                          <button
+                            title="Confirmar exclusão"
+                            onClick={() => deleteMutation.mutate(exp.id)}
+                            disabled={deleteMutation.isPending}
+                            className="rounded-lg px-2 py-1 text-[10px] font-bold bg-red-600 hover:bg-red-500 text-white transition-colors disabled:opacity-50"
+                          >
+                            {deleteMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Sim"}
+                          </button>
+                          <button
+                            title="Cancelar"
+                            onClick={() => setDeletingId(null)}
+                            className="rounded-lg px-2 py-1 text-[10px] font-bold bg-zinc-700 hover:bg-zinc-600 text-white transition-colors"
+                          >
+                            Não
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          title="Excluir"
+                          onClick={() => setDeletingId(exp.id)}
+                          className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-red-400 transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 // ─────────────────────────────────────────────
 // Agendamentos Tab
@@ -1143,6 +1569,7 @@ function ClientesTab({
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("todos");
   const [cancelModalAppt, setCancelModalAppt] = useState<Appointment | null>(null);
+  const [editModalAppt, setEditModalAppt] = useState<Appointment | null>(null);
 
   // Fetch all appointments for clients tab
   const { data: appointments = [], isLoading } = useQuery({
@@ -1150,7 +1577,7 @@ function ClientesTab({
     queryFn: async () => {
       let q = supabase
         .from("appointments")
-        .select("id, client_name, client_phone, starts_at, ends_at, price_cents, status, notes, services(name), barbers(name)")
+        .select("id, service_id, client_name, client_phone, starts_at, ends_at, price_cents, status, notes, services(name), barbers(name)")
         .order("starts_at", { ascending: false });
 
       if (barber?.id) {
@@ -1207,7 +1634,7 @@ function ClientesTab({
         <div>
           <h1 className="text-xl font-bold text-white sm:text-2xl">Clientes & Agendamentos</h1>
           <p className="text-xs text-zinc-400 sm:text-sm">
-            Gerencie os clientes, entre em contato via WhatsApp e cancele se necessário.
+            Gerencie os clientes, entre em contato via WhatsApp e cancele ou edite se necessário.
           </p>
         </div>
 
@@ -1372,6 +1799,18 @@ function ClientesTab({
                     WhatsApp
                   </a>
 
+                  {/* Editar Action Button */}
+                  {!isCanceled && (
+                    <button
+                      onClick={() => setEditModalAppt(appt)}
+                      className="flex items-center justify-center gap-1.5 rounded-xl bg-blue-500/10 border border-blue-500/30 px-3 py-2 text-xs font-bold text-blue-400 transition-all hover:bg-blue-500/20 active:scale-95"
+                      title="Editar serviço e valor"
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Editar
+                    </button>
+                  )}
+
                   {/* Cancel Action Button */}
                   {!isCanceled && (
                     <button
@@ -1388,6 +1827,14 @@ function ClientesTab({
             );
           })}
         </div>
+      )}
+
+      {/* Edit Appointment Modal */}
+      {editModalAppt && (
+        <EditAppointmentModal
+          appt={editModalAppt}
+          onClose={() => setEditModalAppt(null)}
+        />
       )}
 
       {/* Cancellation Confirmation Modal */}
@@ -1442,6 +1889,229 @@ function ClientesTab({
 }
 
 // ─────────────────────────────────────────────
+// Modal: Editar Atendimento (Serviço e Valor Gasto)
+// ─────────────────────────────────────────────
+function EditAppointmentModal({
+  appt,
+  onClose,
+}: {
+  appt: Appointment;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const { data: services = [] } = useQuery({
+    queryKey: ["active-services-edit"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("services")
+        .select("id, name, price_cents")
+        .eq("active", true)
+        .order("sort_order");
+      return data ?? [];
+    },
+  });
+
+  const initialServiceId = appt.service_id ?? "";
+  const [selectedServiceId, setSelectedServiceId] = useState<string>(initialServiceId);
+  const [priceInput, setPriceInput] = useState<string>(
+    (appt.price_cents / 100).toFixed(2).replace(".", ",")
+  );
+  const [notesInput, setNotesInput] = useState<string>(appt.notes ?? "");
+
+  const handleServiceSelect = (svcId: string) => {
+    setSelectedServiceId(svcId);
+    if (svcId === "corte_mensal") {
+      setPriceInput("0,00");
+    } else if (svcId !== "personalizado") {
+      const found = services.find((s) => s.id === svcId);
+      if (found) {
+        setPriceInput((found.price_cents / 100).toFixed(2).replace(".", ","));
+      }
+    }
+  };
+
+  const editMutation = useMutation({
+    mutationFn: async () => {
+      const cleanPrice = priceInput.replace(/[^\d,.]/g, "").replace(",", ".");
+      const parsedVal = parseFloat(cleanPrice);
+      if (Number.isNaN(parsedVal) || parsedVal < 0) {
+        throw new Error("Informe um valor válido.");
+      }
+      const priceCents = Math.round(parsedVal * 100);
+
+      const updatePayload: {
+        price_cents: number;
+        notes?: string | null;
+        service_id?: string;
+      } = {
+        price_cents: priceCents,
+        notes: notesInput.trim() || null,
+      };
+
+      if (selectedServiceId && selectedServiceId !== "personalizado" && selectedServiceId !== "corte_mensal") {
+        updatePayload.service_id = selectedServiceId;
+      }
+
+      if (selectedServiceId === "corte_mensal" && !notesInput.includes("[Corte Mensal]")) {
+        updatePayload.notes = notesInput.trim() ? `[Corte Mensal] ${notesInput.trim()}` : "Corte Mensal (Plano Mensal)";
+      }
+
+      const { error } = await supabase
+        .from("appointments")
+        .update(updatePayload)
+        .eq("id", appt.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["barber-appointments"] });
+      queryClient.invalidateQueries({ queryKey: ["painel-appointments"] });
+      queryClient.invalidateQueries({ queryKey: ["clientes-appointments"] });
+      queryClient.invalidateQueries({ queryKey: ["site-data"] });
+      toast.success("Agendamento e valor atualizados!");
+      onClose();
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Erro ao atualizar agendamento.");
+    },
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl space-y-5">
+        <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+          <div className="flex items-center gap-2.5 text-[#39ff14]">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#39ff14]/10 border border-[#39ff14]/20">
+              <Pencil className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white leading-tight">Editar Agendamento</h3>
+              <p className="text-xs text-zinc-400">{appt.client_name}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            editMutation.mutate();
+          }}
+          className="space-y-4 text-xs"
+        >
+          {/* Service Selection */}
+          <div>
+            <label className="block font-semibold text-zinc-300 mb-1.5">Serviço</label>
+            <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1">
+              {services.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => handleServiceSelect(s.id)}
+                  className={`flex items-center justify-between rounded-xl border p-3 text-left transition-all ${
+                    selectedServiceId === s.id
+                      ? "border-[#39ff14] bg-[#39ff14]/10 text-white font-bold"
+                      : "border-zinc-800 bg-zinc-950/60 text-zinc-400 hover:border-zinc-700"
+                  }`}
+                >
+                  <span>{s.name}</span>
+                  <span className="text-zinc-500 font-normal">{formatBRL(s.price_cents)}</span>
+                </button>
+              ))}
+
+              {/* Corte Mensal Option */}
+              <button
+                type="button"
+                onClick={() => handleServiceSelect("corte_mensal")}
+                className={`flex items-center justify-between rounded-xl border p-3 text-left transition-all ${
+                  selectedServiceId === "corte_mensal"
+                    ? "border-[#39ff14] bg-[#39ff14]/10 text-white font-bold"
+                    : "border-zinc-800 bg-zinc-950/60 text-zinc-400 hover:border-zinc-700"
+                }`}
+              >
+                <span className="flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5 text-[#39ff14]" />
+                  Corte Mensal
+                </span>
+                <span className="text-xs text-[#39ff14] font-semibold">R$ 0,00 (Plano Mensal)</span>
+              </button>
+
+              {/* Personalizado Option */}
+              <button
+                type="button"
+                onClick={() => handleServiceSelect("personalizado")}
+                className={`flex items-center justify-between rounded-xl border p-3 text-left transition-all ${
+                  selectedServiceId === "personalizado"
+                    ? "border-[#39ff14] bg-[#39ff14]/10 text-white font-bold"
+                    : "border-zinc-800 bg-zinc-950/60 text-zinc-400 hover:border-zinc-700"
+                }`}
+              >
+                <span className="flex items-center gap-1.5">
+                  <Scissors className="h-3.5 w-3.5 text-[#39ff14]" />
+                  Personalizado
+                </span>
+                <span className="text-xs text-[#39ff14] font-semibold">Valor Sob Medida</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Price Cents / Valor Gasto */}
+          <div>
+            <label className="block font-semibold text-zinc-300 mb-1">Valor Gasto (R$)</label>
+            <div className="relative">
+              <span className="absolute left-3 top-2.5 text-zinc-400 font-bold">R$</span>
+              <input
+                type="text"
+                required
+                value={priceInput}
+                onChange={(e) => setPriceInput(e.target.value)}
+                placeholder="0,00"
+                className="w-full rounded-xl border border-zinc-700 bg-zinc-950 py-2.5 pl-10 pr-3 text-sm font-bold text-white focus:border-[#39ff14] focus:outline-none"
+              />
+            </div>
+            <p className="text-[11px] text-zinc-500 mt-1">
+              Altere o valor gasto pelo cliente neste agendamento (permite R$ 0,00 para plano mensal).
+            </p>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block font-semibold text-zinc-300 mb-1">Observações (opcional)</label>
+            <textarea
+              rows={2}
+              value={notesInput}
+              onChange={(e) => setNotesInput(e.target.value)}
+              placeholder="Ex: Valor sob medida / ajuste"
+              className="w-full rounded-xl border border-zinc-700 bg-zinc-950 p-2.5 text-zinc-300 focus:border-[#39ff14] focus:outline-none resize-none"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={editMutation.isPending}
+              className="flex-1 rounded-xl border border-zinc-700 bg-zinc-800 py-2.5 font-bold text-zinc-300 hover:bg-zinc-700"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={editMutation.isPending}
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-[#39ff14] py-2.5 font-bold text-black shadow-lg shadow-[#39ff14]/20 hover:bg-[#32e010] active:scale-95 disabled:opacity-50"
+            >
+              {editMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar Alterações"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
 // Modal: Adicionar Atendimento Manual (Concluído)
 // ─────────────────────────────────────────────
 function AddAppointmentModal({
@@ -1458,6 +2128,7 @@ function AddAppointmentModal({
   const [clientPhone, setClientPhone] = useState("");
   const [selectedBarberId, setSelectedBarberId] = useState(barber?.id ?? "");
   const [serviceId, setServiceId] = useState("");
+  const [customPriceInput, setCustomPriceInput] = useState("0,00");
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [time, setTime] = useState(format(new Date(), "HH:mm"));
   const [notes, setNotes] = useState("");
@@ -1500,8 +2171,21 @@ function AddAppointmentModal({
   useEffect(() => {
     if (!serviceId && services.length > 0) {
       setServiceId(services[0].id);
+      setCustomPriceInput((services[0].price_cents / 100).toFixed(2).replace(".", ","));
     }
   }, [services, serviceId]);
+
+  const handleServiceChange = (newServiceId: string) => {
+    setServiceId(newServiceId);
+    if (newServiceId === "corte_mensal") {
+      setCustomPriceInput("0,00");
+    } else {
+      const found = services.find((s) => s.id === newServiceId);
+      if (found) {
+        setCustomPriceInput((found.price_cents / 100).toFixed(2).replace(".", ","));
+      }
+    }
+  };
 
   const addMutation = useMutation({
     mutationFn: async () => {
@@ -1510,9 +2194,23 @@ function AddAppointmentModal({
       const bId = selectedBarberId || barber?.id;
       if (!bId) throw new Error("Barbeiro não identificado.");
 
-      const selectedService = services.find((s) => s.id === serviceId);
-      const duration = selectedService?.duration_min ?? 30;
-      const priceCents = selectedService?.price_cents ?? 0;
+      let targetServiceId = serviceId;
+      let duration = 30;
+
+      if (serviceId === "corte_mensal") {
+        const foundCorte = services.find((s) => s.name.toLowerCase().includes("corte")) || services[0];
+        targetServiceId = foundCorte?.id ?? "";
+        duration = foundCorte?.duration_min ?? 30;
+      } else {
+        const selectedService = services.find((s) => s.id === serviceId);
+        duration = selectedService?.duration_min ?? 30;
+      }
+
+      if (!targetServiceId) throw new Error("Serviço não identificado.");
+
+      const cleanPrice = (customPriceInput || "0").replace(/[^\d,.]/g, "").replace(",", ".");
+      const parsedVal = parseFloat(cleanPrice);
+      const priceCents = Number.isNaN(parsedVal) || parsedVal < 0 ? 0 : Math.round(parsedVal * 100);
 
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Informe uma data válida.");
       const hhmm = (time || "12:00").slice(0, 5);
@@ -1531,20 +2229,27 @@ function AddAppointmentModal({
       if (conflicts && conflicts.length > 0) {
         const c = conflicts[0];
         throw new Error(
-          `Já existe um atendimento das ${format(parseISO(c.starts_at), "HH:mm")} às ${format(parseISO(c.ends_at), "HH:mm")} nesse horário. Escolha outro horário.`,
+          `Já existe um atendimento das ${format(parseISO(c.starts_at), "HH:mm")} às ${format(parseISO(c.ends_at), "HH:mm")} nesse horário. Escolha outro horário.`
         );
+      }
+
+      let finalNotes = notes.trim();
+      if (serviceId === "corte_mensal") {
+        finalNotes = finalNotes ? `[Corte Mensal] ${finalNotes}` : "Corte Mensal (Plano Mensal)";
+      } else if (!finalNotes) {
+        finalNotes = "Atendimento balcão (Adicionado no painel)";
       }
 
       const { error } = await supabase.from("appointments").insert({
         barber_id: bId,
-        service_id: serviceId,
+        service_id: targetServiceId,
         client_name: clientName.trim(),
         client_phone: clientPhone.trim() || "(19) 00000-0000",
         starts_at: startDate.toISOString(),
         ends_at: endDate.toISOString(),
         price_cents: priceCents,
         status: "concluido",
-        notes: notes.trim() || "Atendimento balcão (Adicionado no painel)",
+        notes: finalNotes,
       });
 
       if (error) {
@@ -1621,7 +2326,7 @@ function AddAppointmentModal({
               <label className="block font-semibold text-zinc-300 mb-1">Serviço Realizado *</label>
               <select
                 value={serviceId}
-                onChange={(e) => setServiceId(e.target.value)}
+                onChange={(e) => handleServiceChange(e.target.value)}
                 className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-white focus:border-emerald-500/50 focus:outline-none"
               >
                 {services.map((s) => (
@@ -1629,6 +2334,7 @@ function AddAppointmentModal({
                     {s.name} (R$ {(s.price_cents / 100).toFixed(2).replace(".", ",")})
                   </option>
                 ))}
+                <option value="corte_mensal">Corte Mensal (Plano Mensal - R$ 0,00 ou Personalizado)</option>
               </select>
             </div>
 
@@ -1648,6 +2354,25 @@ function AddAppointmentModal({
                 </select>
               </div>
             ) : null}
+          </div>
+
+          {/* Valor Gasto (R$) */}
+          <div>
+            <label className="block font-semibold text-zinc-300 mb-1">Valor Gasto (R$) *</label>
+            <div className="relative">
+              <span className="absolute left-3 top-2 text-zinc-400 font-bold">R$</span>
+              <input
+                type="text"
+                required
+                value={customPriceInput}
+                onChange={(e) => setCustomPriceInput(e.target.value)}
+                placeholder="0,00"
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 py-2 pl-10 pr-3 text-white font-bold focus:border-emerald-500/50 focus:outline-none"
+              />
+            </div>
+            <p className="text-[10px] text-zinc-500 mt-1">
+              Para atendimentos de plano mensal, informe R$ 0,00 ou o valor cobrado.
+            </p>
           </div>
 
           {/* Date & Time */}
@@ -1713,3 +2438,4 @@ function AddAppointmentModal({
     </div>
   );
 }
+

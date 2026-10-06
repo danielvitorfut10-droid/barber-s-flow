@@ -38,19 +38,21 @@ function Home() {
   return (
     <div>
       {/* SEÇÃO HERO */}
-      <section className="relative isolate overflow-hidden min-h-[85vh] md:min-h-screen flex items-center justify-center">
-        {/* Fundo DESKTOP: parallax fixo com FUNDO-NEGUIN */}
-        <div
-          className="absolute inset-0 hidden md:block bg-cover bg-center bg-no-repeat bg-fixed bg-[url('/FUNDO-NEGUIN.jpg')]"
-          aria-hidden="true"
-        />
-        {/* Fundo MOBILE: imagem fundo-mobile com bg-scroll (bg-fixed quebra no mobile) */}
-        <div
-          className="absolute inset-0 block md:hidden bg-cover bg-center bg-no-repeat bg-scroll bg-[url('/fundo-mobile.jpg')]"
-          aria-hidden="true"
-        />
-        {/* Sobreposição suave para dar máximo destaque à imagem preservando a legibilidade */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-black/15 to-black/70" />
+      <section className="relative min-h-[85vh] md:min-h-screen flex items-center justify-center isolate">
+        {/* Imagem de Fundo Fixa (Efeito de revelação/site subindo no Mobile e Desktop) */}
+        <div className="fixed inset-0 -z-10 h-screen w-full pointer-events-none overflow-hidden">
+          <img
+            src="/hero-bg.jpg"
+            alt="Studio Blackout Barbearia"
+            className="w-full h-full object-cover object-center"
+            loading="eager"
+            // @ts-ignore
+            fetchPriority="high"
+            decoding="async"
+          />
+          {/* Overlay equilibrado para preservar nitidez e visibilidade */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/25 to-black/80" />
+        </div>
 
         <div className="relative mx-auto flex max-w-4xl flex-col items-center text-center px-4 py-32 md:py-44 z-10">
           <h1 className="max-w-3xl font-display text-4xl font-extrabold leading-[1.1] tracking-tight md:text-6xl text-white drop-shadow-lg">
@@ -64,8 +66,10 @@ function Home() {
         </div>
       </section>
 
-      {/* SEÇÃO SOBRE NÓS (Fundo Branco) */}
-      <section id="sobre" className="w-full bg-white text-zinc-900 py-20 px-4 overflow-hidden">
+      {/* Conteúdo Restante do Site que sobe por cima da Hero */}
+      <div className="relative z-10 shadow-2xl">
+        {/* SEÇÃO SOBRE NÓS (Fundo Branco) */}
+        <section id="sobre" className="w-full bg-white text-zinc-900 py-20 px-4 overflow-hidden">
         <div className="mx-auto max-w-4xl">
           {/* Título e Subtítulo Centralizados */}
           <div className="text-center mb-8">
@@ -284,6 +288,7 @@ function Home() {
           </div>
         </div>
       </section>
+      </div>
     </div>
   );
 }

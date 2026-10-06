@@ -80,6 +80,47 @@ export type Database = {
           },
         ]
       }
+      expenses: {
+        Row: {
+          id: string
+          barber_id: string
+          item_name: string
+          amount_cents: number
+          expense_date: string
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          barber_id: string
+          item_name: string
+          amount_cents?: number
+          expense_date: string
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          barber_id?: string
+          item_name?: string
+          amount_cents?: number
+          expense_date?: string
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_barber_id_fkey"
+            columns: ["barber_id"]
+            isOneToOne: false
+            referencedRelation: "barbers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       barbers: {
         Row: {
           active: boolean
