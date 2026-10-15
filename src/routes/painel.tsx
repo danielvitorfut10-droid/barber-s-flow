@@ -2110,6 +2110,13 @@ function EditAppointmentModal({
   );
   const [notesInput, setNotesInput] = useState<string>(appt.notes ?? "");
 
+  // Date & Time editing
+  const apptStart = parseISO(appt.starts_at);
+  const apptEnd = parseISO(appt.ends_at);
+  const durationMs = apptEnd.getTime() - apptStart.getTime();
+  const [dateInput, setDateInput] = useState<string>(format(apptStart, "yyyy-MM-dd"));
+  const [timeInput, setTimeInput] = useState<string>(format(apptStart, "HH:mm"));
+
   const handleServiceSelect = (svcId: string) => {
     setSelectedServiceId(svcId);
     if (svcId === "corte_mensal") {
@@ -2131,13 +2138,24 @@ function EditAppointmentModal({
       }
       const priceCents = Math.round(parsedVal * 100);
 
+      // Rebuild starts_at / ends_at from the chosen date + time
+      if (!dateInput || !timeInput) throw new Error("Informe data e horário.");
+      const [year, month, day] = dateInput.split("-").map(Number);
+      const [hour, minute] = timeInput.split(":").map(Number);
+      const newStart = new Date(year, month - 1, day, hour, minute, 0);
+      const newEnd = new Date(newStart.getTime() + durationMs);
+
       const updatePayload: {
         price_cents: number;
         notes?: string | null;
         service_id?: string;
+        starts_at: string;
+        ends_at: string;
       } = {
         price_cents: priceCents,
         notes: notesInput.trim() || null,
+        starts_at: newStart.toISOString(),
+        ends_at: newEnd.toISOString(),
       };
 
       if (selectedServiceId && selectedServiceId !== "personalizado" && selectedServiceId !== "corte_mensal") {
@@ -2170,7 +2188,7 @@ function EditAppointmentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl space-y-5">
+      <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
           <div className="flex items-center gap-2.5 text-[#39ff14]">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#39ff14]/10 border border-[#39ff14]/20">
@@ -2249,6 +2267,30 @@ function EditAppointmentModal({
             </div>
           </div>
 
+          {/* Date & Time */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-zinc-300 mb-1.5">Data do Agendamento</label>
+              <input
+                type="date"
+                required
+                value={dateInput}
+                onChange={(e) => setDateInput(e.target.value)}
+                className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-white focus:border-[#39ff14] focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-zinc-300 mb-1.5">Horário</label>
+              <input
+                type="time"
+                required
+                value={timeInput}
+                onChange={(e) => setTimeInput(e.target.value)}
+                className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-white focus:border-[#39ff14] focus:outline-none"
+              />
+            </div>
+          </div>
+
           {/* Price Cents / Valor Gasto */}
           <div>
             <label className="block font-semibold text-zinc-300 mb-1">Valor Gasto (R$)</label>
@@ -2306,6 +2348,9 @@ function EditAppointmentModal({
 // ─────────────────────────────────────────────
 // Modal: Adicionar Atendimento Manual (Concluído)
 // ─────────────────────────────────────────────
+// Helper type for corte mensal extra slots
+type DateTimeSlot = { date: string; time: string };
+
 function AddAppointmentModal({
   barber,
   role,
@@ -2324,6 +2369,19 @@ function AddAppointmentModal({
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [time, setTime] = useState(format(new Date(), "HH:mm"));
   const [notes, setNotes] = useState("");
+
+  // Extra slots for Corte Mensal (up to 3 extra = 4 total)
+  const [extraSlots, setExtraSlots] = useState<DateTimeSlot[]>([
+    { date: "", time: "" },
+    { date: "", time: "" },
+    { date: "", time: "" },
+  ]);
+
+  const isCorte = serviceId === "corte_mensal";
+
+  const updateExtraSlot = (index: number, field: keyof DateTimeSlot, value: string) => {
+    setExtraSlots((prev) => prev.map((s, i) => (i === index ? { ...s, [field]: value } : s)));
+  };
 
   // Fetch active services
   const { data: services = [] } = useQuery({
@@ -2404,49 +2462,69 @@ function AddAppointmentModal({
       const parsedVal = parseFloat(cleanPrice);
       const priceCents = Number.isNaN(parsedVal) || parsedVal < 0 ? 0 : Math.round(parsedVal * 100);
 
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Informe uma data válida.");
-      const hhmm = (time || "12:00").slice(0, 5);
-      const startDate = new Date(`${date}T${hhmm}:00-03:00`);
-      if (Number.isNaN(startDate.getTime())) throw new Error("Informe um horário válido.");
-      const endDate = new Date(startDate.getTime() + duration * 60 * 1000);
+      // Build list of slots to insert
+      const slotsToInsert: { date: string; time: string; slotLabel: string }[] = [];
 
-      const { data: conflicts } = await supabase
-        .from("appointments")
-        .select("id, starts_at, ends_at")
-        .eq("barber_id", bId)
-        .neq("status", "cancelado")
-        .lt("starts_at", endDate.toISOString())
-        .gt("ends_at", startDate.toISOString())
-        .limit(1);
-      if (conflicts && conflicts.length > 0) {
-        const c = conflicts[0];
-        throw new Error(
-          `Já existe um atendimento das ${format(parseISO(c.starts_at), "HH:mm")} às ${format(parseISO(c.ends_at), "HH:mm")} nesse horário. Escolha outro horário.`
-        );
+      // Slot 1 (always required)
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Informe uma data válida.");
+      slotsToInsert.push({ date, time: time || "12:00", slotLabel: "Corte 1" });
+
+      // Extra slots (only if date is filled)
+      if (isCorte) {
+        extraSlots.forEach((s, i) => {
+          if (s.date && /^\d{4}-\d{2}-\d{2}$/.test(s.date)) {
+            slotsToInsert.push({ date: s.date, time: s.time || "12:00", slotLabel: `Corte ${i + 2}` });
+          }
+        });
       }
 
       let finalNotes = notes.trim();
-      if (serviceId === "corte_mensal") {
-        finalNotes = finalNotes ? `[Corte Mensal] ${finalNotes}` : "Corte Mensal (Plano Mensal)";
-      } else if (!finalNotes) {
-        finalNotes = "Atendimento balcão (Adicionado no painel)";
-      }
+      const baseNotes = isCorte
+        ? (finalNotes ? `[Corte Mensal] ${finalNotes}` : "Corte Mensal (Plano Mensal)")
+        : (finalNotes || "Atendimento balcão (Adicionado no painel)");
 
-      const { error } = await supabase.from("appointments").insert({
-        barber_id: bId,
-        service_id: targetServiceId,
-        client_name: clientName.trim(),
-        client_phone: clientPhone.trim() || "(19) 00000-0000",
-        starts_at: startDate.toISOString(),
-        ends_at: endDate.toISOString(),
-        price_cents: priceCents,
-        status: "concluido",
-        notes: finalNotes,
-      });
+      // Insert each slot sequentially
+      for (const slot of slotsToInsert) {
+        const hhmm = slot.time.slice(0, 5);
+        const startDate = new Date(`${slot.date}T${hhmm}:00-03:00`);
+        if (Number.isNaN(startDate.getTime())) throw new Error(`Horário inválido no slot ${slot.slotLabel}.`);
+        const endDate = new Date(startDate.getTime() + duration * 60 * 1000);
 
-      if (error) {
-        if (error.code === "23P01") throw new Error("Esse horário já está ocupado. Escolha outro horário.");
-        throw new Error("Não foi possível salvar o atendimento. Tente novamente.");
+        const { data: conflicts } = await supabase
+          .from("appointments")
+          .select("id, starts_at, ends_at")
+          .eq("barber_id", bId)
+          .neq("status", "cancelado")
+          .lt("starts_at", endDate.toISOString())
+          .gt("ends_at", startDate.toISOString())
+          .limit(1);
+        if (conflicts && conflicts.length > 0) {
+          const c = conflicts[0];
+          throw new Error(
+            `${slot.slotLabel}: Já existe um atendimento das ${format(parseISO(c.starts_at), "HH:mm")} às ${format(parseISO(c.ends_at), "HH:mm")}. Escolha outro horário.`
+          );
+        }
+
+        const slotNotes = slotsToInsert.length > 1
+          ? `${baseNotes} – ${slot.slotLabel}`
+          : baseNotes;
+
+        const { error } = await supabase.from("appointments").insert({
+          barber_id: bId,
+          service_id: targetServiceId,
+          client_name: clientName.trim(),
+          client_phone: clientPhone.trim() || "(19) 00000-0000",
+          starts_at: startDate.toISOString(),
+          ends_at: endDate.toISOString(),
+          price_cents: priceCents,
+          status: "concluido",
+          notes: slotNotes,
+        });
+
+        if (error) {
+          if (error.code === "23P01") throw new Error(`${slot.slotLabel}: Horário já ocupado. Escolha outro.`);
+          throw new Error("Não foi possível salvar o atendimento. Tente novamente.");
+        }
       }
     },
     onSuccess: () => {
@@ -2454,7 +2532,7 @@ function AddAppointmentModal({
       queryClient.invalidateQueries({ queryKey: ["painel-appointments"] });
       queryClient.invalidateQueries({ queryKey: ["clientes-appointments"] });
       queryClient.invalidateQueries({ queryKey: ["site-data"] });
-      toast.success("Atendimento concluído adicionado e receita atualizada!");
+      toast.success("Atendimento(s) adicionado(s) e receita atualizada!");
       onClose();
     },
     onError: (err: any) => {
@@ -2567,28 +2645,72 @@ function AddAppointmentModal({
             </p>
           </div>
 
-          {/* Date & Time */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block font-semibold text-zinc-300 mb-1">Data *</label>
-              <input
-                type="date"
-                required
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-white focus:border-emerald-500/50 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block font-semibold text-zinc-300 mb-1">Horário (Opcional)</label>
-              <input
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-white focus:border-emerald-500/50 focus:outline-none"
-              />
+          {/* Date & Time – Slot 1 */}
+          <div>
+            {isCorte && (
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-[10px] font-bold">1</div>
+                <span className="text-xs font-semibold text-emerald-400">1ª sessão do mês</span>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-semibold text-zinc-300 mb-1">Data *</label>
+                <input
+                  type="date"
+                  required
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-white focus:border-emerald-500/50 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-zinc-300 mb-1">Horário (Opcional)</label>
+                <input
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-white focus:border-emerald-500/50 focus:outline-none"
+                />
+              </div>
             </div>
           </div>
+
+          {/* Extra slots visible only for Corte Mensal */}
+          {isCorte && (
+            <div className="space-y-3">
+              {extraSlots.map((slot, i) => (
+                <div key={i}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-zinc-700/60 border border-zinc-600 text-zinc-300 text-[10px] font-bold">{i + 2}</div>
+                    <span className="text-xs font-semibold text-zinc-400">{i + 2}ª sessão do mês <span className="text-zinc-600 font-normal">(opcional)</span></span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <input
+                        type="date"
+                        value={slot.date}
+                        onChange={(e) => updateExtraSlot(i, "date", e.target.value)}
+                        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-white focus:border-emerald-500/50 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="time"
+                        value={slot.time}
+                        onChange={(e) => updateExtraSlot(i, "time", e.target.value)}
+                        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-white focus:border-emerald-500/50 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <p className="text-[10px] text-zinc-500 flex items-center gap-1">
+                <CalendarDays className="h-3 w-3 text-emerald-500/70" />
+                Preencha apenas as sessões que já aconteceram. Cada uma vira um registro separado e poderá ser editada individualmente.
+              </p>
+            </div>
+          )}
 
           {/* Notes */}
           <div>
