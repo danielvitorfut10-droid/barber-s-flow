@@ -616,7 +616,13 @@ function ReceitaTab({
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <SummaryCard
+          label="Faturamento Bruto"
+          value={formatBRL(rawTotalCents)}
+          icon={<TrendingUp className="h-5 w-5" />}
+          accentBruto
+        />
         <SummaryCard
           label="Receita Líquida"
           value={formatBRL(netTotalCents)}
@@ -714,29 +720,39 @@ function SummaryCard({
   value,
   icon,
   accent,
+  accentBruto,
 }: {
   label: string;
   value: string;
   icon: React.ReactNode;
   accent?: boolean;
+  accentBruto?: boolean;
 }) {
   return (
     <div
       className={`rounded-2xl border p-4 sm:p-6 ${
         accent
           ? "border-[#39ff14]/20 bg-[#39ff14]/5"
+          : accentBruto
+          ? "border-blue-500/20 bg-blue-500/5"
           : "border-zinc-800 bg-zinc-900/50"
       }`}
     >
       <div
         className={`mb-2 flex h-8 w-8 items-center justify-center rounded-xl sm:mb-3 sm:h-10 sm:w-10 ${
-          accent ? "bg-[#39ff14]/15 text-[#39ff14]" : "bg-zinc-800 text-zinc-400"
+          accent
+            ? "bg-[#39ff14]/15 text-[#39ff14]"
+            : accentBruto
+            ? "bg-blue-500/15 text-blue-400"
+            : "bg-zinc-800 text-zinc-400"
         }`}
       >
         {icon}
       </div>
       <p className="text-[10px] text-zinc-500 uppercase tracking-wide sm:text-xs">{label}</p>
-      <p className={`mt-1 text-lg font-bold sm:text-2xl ${accent ? "text-[#39ff14]" : "text-white"}`}>{value}</p>
+      <p className={`mt-1 text-lg font-bold sm:text-2xl ${
+        accent ? "text-[#39ff14]" : accentBruto ? "text-blue-400" : "text-white"
+      }`}>{value}</p>
     </div>
   );
 }
@@ -751,6 +767,48 @@ function StatusBadge({ status }: { status: string }) {
   };
   const s = map[status] ?? { label: status, cls: "text-zinc-400" };
   return <p className={`text-xs font-medium ${s.cls}`}>{s.label}</p>;
+}
+
+// ─────────────────────────────────────────────
+// Helper: Faturamento Bruto card for GastosTab
+// ─────────────────────────────────────────────
+function GastosBrutoCard({ barberId, filterMonth }: { barberId: string; filterMonth: string }) {
+  const { data: appointments = [] } = useQuery({
+    queryKey: ["gastos-bruto-appts", barberId, filterMonth],
+    queryFn: async () => {
+      if (!barberId) return [];
+      const from = `${filterMonth}-01T00:00:00`;
+      const lastDay = new Date(
+        parseInt(filterMonth.split("-")[0]),
+        parseInt(filterMonth.split("-")[1]),
+        0
+      ).getDate();
+      const to = `${filterMonth}-${String(lastDay).padStart(2, "0")}T23:59:59`;
+      const { data } = await supabase
+        .from("appointments")
+        .select("price_cents, status")
+        .eq("barber_id", barberId)
+        .neq("status", "cancelado")
+        .gte("starts_at", from)
+        .lte("starts_at", to);
+      return data ?? [];
+    },
+    enabled: !!barberId,
+  });
+
+  const brutoTotal = appointments.reduce((s: number, a: { price_cents: number }) => s + a.price_cents, 0);
+
+  return (
+    <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 sm:p-5">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-blue-400 uppercase tracking-wide">Faturamento Bruto</span>
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/15 text-blue-400">
+          <TrendingUp className="h-4 w-4" />
+        </div>
+      </div>
+      <p className="mt-2 text-2xl font-extrabold text-blue-400">{formatBRL(brutoTotal)}</p>
+    </div>
+  );
 }
 
 // ─────────────────────────────────────────────
@@ -854,6 +912,9 @@ function GastosTab({
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Faturamento Bruto card – pulled from appointments in this month */}
+        <GastosBrutoCard barberId={targetBarberId ?? ""} filterMonth={filterMonth} />
+
         <div className="rounded-2xl border border-red-900/40 bg-red-950/20 p-4 sm:p-5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-red-400 uppercase tracking-wide">Total em Gastos no Mês</span>
