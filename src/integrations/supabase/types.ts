@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.15"
   }
   public: {
     Tables: {
@@ -76,47 +76,6 @@ export type Database = {
             columns: ["service_id"]
             isOneToOne: false
             referencedRelation: "services"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      expenses: {
-        Row: {
-          id: string
-          barber_id: string
-          item_name: string
-          amount_cents: number
-          expense_date: string
-          notes: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          barber_id: string
-          item_name: string
-          amount_cents?: number
-          expense_date: string
-          notes?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          barber_id?: string
-          item_name?: string
-          amount_cents?: number
-          expense_date?: string
-          notes?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "expenses_barber_id_fkey"
-            columns: ["barber_id"]
-            isOneToOne: false
-            referencedRelation: "barbers"
             referencedColumns: ["id"]
           },
         ]
@@ -215,6 +174,47 @@ export type Database = {
           weekday?: number
         }
         Relationships: []
+      }
+      expenses: {
+        Row: {
+          amount_cents: number
+          barber_id: string
+          created_at: string
+          expense_date: string
+          id: string
+          item_name: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount_cents?: number
+          barber_id: string
+          created_at?: string
+          expense_date: string
+          id?: string
+          item_name: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          barber_id?: string
+          created_at?: string
+          expense_date?: string
+          id?: string
+          item_name?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_barber_id_fkey"
+            columns: ["barber_id"]
+            isOneToOne: false
+            referencedRelation: "barbers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notifications: {
         Row: {
