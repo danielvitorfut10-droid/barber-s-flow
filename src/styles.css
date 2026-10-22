@@ -104,10 +104,21 @@
 @layer base {
   * {
     border-color: var(--color-border);
+    -webkit-tap-highlight-color: transparent;
   }
 
   html {
     scroll-behavior: smooth;
+    touch-action: manipulation;
+    -ms-touch-action: manipulation;
+    -webkit-text-size-adjust: 100%;
+    -moz-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* Prevent double-tap zoom on all interactive elements */
+  a, button, input, select, textarea, label, [role="button"] {
+    touch-action: manipulation;
   }
 
   body {
@@ -115,6 +126,21 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    overscroll-behavior: none;
+  }
+
+  /* Prevent iOS input zoom (inputs with font-size < 16px trigger zoom) */
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="date"],
+  input[type="time"],
+  input[type="password"],
+  input[type="search"],
+  select,
+  textarea {
+    font-size: 16px !important;
   }
 
   h1,

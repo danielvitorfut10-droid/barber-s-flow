@@ -121,18 +121,7 @@ function PainelPage() {
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  // Disable pinch/double-tap zoom on mobile while the panel is open
-  useEffect(() => {
-    const viewport = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
-    const original = viewport?.getAttribute("content") ?? null;
-    viewport?.setAttribute(
-      "content",
-      "width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover",
-    );
-    return () => {
-      if (viewport && original !== null) viewport.setAttribute("content", original);
-    };
-  }, []);
+  // Zoom is now disabled globally via viewport meta in __root.tsx
 
   // Close user menu on outside click
   useEffect(() => {
@@ -1162,8 +1151,8 @@ function GastosModal({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl overflow-y-auto overscroll-contain" style={{ maxHeight: 'calc(100vh - 1.5rem)', maxWidth: 'calc(100vw - 1.5rem)' }}>
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">
           <div className="flex items-center gap-3">
@@ -2187,8 +2176,8 @@ function EditAppointmentModal({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 overflow-y-auto overscroll-contain" style={{ maxHeight: 'calc(100vh - 1.5rem)', maxWidth: 'calc(100vw - 1.5rem)' }}>
         <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
           <div className="flex items-center gap-2.5 text-[#39ff14]">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#39ff14]/10 border border-[#39ff14]/20">
@@ -2541,8 +2530,8 @@ function AddAppointmentModal({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl space-y-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 overflow-y-auto overscroll-contain" style={{ maxHeight: 'calc(100vh - 1.5rem)', maxWidth: 'calc(100vw - 1.5rem)' }}>
         <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
           <div className="flex items-center gap-2 text-emerald-400">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 border border-emerald-500/20">
