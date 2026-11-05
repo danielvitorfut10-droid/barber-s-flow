@@ -77,9 +77,8 @@ export function BookingModal({ open, onOpenChange }: Props) {
 
     if (dKey < todayKey) return true;
 
-    const maxDate = new Date();
-    maxDate.setDate(maxDate.getDate() + 30);
-    const maxKey = toDateKey(maxDate);
+    // Allow booking up to Dec 31, 2026 (end of the year)
+    const maxKey = "2026-12-31";
     if (dKey > maxKey) return true;
 
     const weekday = d.getDay();

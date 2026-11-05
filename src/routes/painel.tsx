@@ -1883,7 +1883,7 @@ function ClientesTab({
         </div>
       </div>
 
-      {/* Appointment / Client Cards */}
+      {/* Appointment / Client Cards — grouped by date */}
       {isLoading ? (
         <div className="flex h-48 items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-[#39ff14]" />
@@ -1894,121 +1894,149 @@ function ClientesTab({
           <p className="text-sm font-semibold text-zinc-400">Nenhum agendamento encontrado.</p>
           <p className="text-xs text-zinc-600 mt-1">Tente ajustar os filtros ou os termos de busca.</p>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((appt) => {
-            const startsDate = parseISO(appt.starts_at);
-            const formattedDate = format(startsDate, "dd 'de' MMMM", { locale: ptBR });
-            const formattedTime = format(startsDate, "HH:mm");
+      ) : (() => {
+        // Group by date key (YYYY-MM-DD), sorted newest first
+        const groups: Record<string, Appointment[]> = {};
+        for (const appt of filtered) {
+          const dayKey = appt.starts_at.slice(0, 10);
+          if (!groups[dayKey]) groups[dayKey] = [];
+          groups[dayKey].push(appt);
+        }
+        const sortedDayKeys = Object.keys(groups).sort((a, b) => b.localeCompare(a));
 
-            // Format phone number for WhatsApp
-            const rawDigits = appt.client_phone.replace(/\D/g, "");
-            const fullPhone = rawDigits.startsWith("55") ? rawDigits : `55${rawDigits}`;
-            const waMessage = encodeURIComponent(
-              `Olá ${appt.client_name}, referente ao seu agendamento no Studio Blackout para ${formattedDate} às ${formattedTime}:`
-            );
-            const waUrl = `https://wa.me/${fullPhone}?text=${waMessage}`;
+        return (
+          <div className="space-y-8">
+            {sortedDayKeys.map((dayKey) => {
+              const dayAppts = groups[dayKey];
+              const dayDate = parseISO(dayKey + "T12:00:00");
+              const dayLabel = format(dayDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+              const isCurrentDay = isToday(dayDate);
 
-            const isCanceled = appt.status === "cancelado";
-
-            return (
-              <div
-                key={appt.id}
-                className={`relative flex flex-col justify-between rounded-2xl border p-5 transition-all ${
-                  isCanceled
-                    ? "border-red-500/20 bg-red-500/5 opacity-70"
-                    : "border-zinc-800 bg-zinc-900/60 hover:border-zinc-700"
-                }`}
-              >
-                <div>
-                  {/* Card Header: Name + Status */}
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <div>
-                      <h3 className="text-base font-bold text-white leading-tight">{appt.client_name}</h3>
-                      <p className="text-xs text-zinc-400 flex items-center gap-1 mt-0.5">
-                        <Phone className="h-3 w-3 text-zinc-500 shrink-0" />
-                        {appt.client_phone}
-                      </p>
+              return (
+                <div key={dayKey}>
+                  {/* ── Date Divider ── */}
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-bold uppercase tracking-wide ${
+                      isCurrentDay
+                        ? "bg-[#39ff14]/10 border-[#39ff14]/30 text-[#39ff14]"
+                        : "bg-zinc-900 border-zinc-800 text-zinc-400"
+                    }`}>
+                      <CalendarDays className="h-3.5 w-3.5" />
+                      <span className="capitalize">{dayLabel}</span>
+                      {isCurrentDay && (
+                        <span className="ml-1 rounded bg-[#39ff14] px-1.5 py-0.5 text-[9px] font-extrabold text-black">HOJE</span>
+                      )}
                     </div>
-                    <StatusBadge status={appt.status} />
+                    <span className="text-xs text-zinc-600 font-medium whitespace-nowrap">
+                      {dayAppts.length} agendamento{dayAppts.length !== 1 ? "s" : ""}
+                    </span>
+                    <div className="flex-1 h-px bg-zinc-800" />
                   </div>
 
-                  {/* Booking Details Box */}
-                  <div className="space-y-2 rounded-xl bg-zinc-950/60 p-3 text-xs border border-zinc-800/80 mb-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-zinc-500">Serviço:</span>
-                      <span className="font-semibold text-white">{appt.services?.name ?? "Serviço"}</span>
-                    </div>
+                  {/* Cards Grid for this day */}
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {dayAppts.map((appt) => {
+                      const startsDate = parseISO(appt.starts_at);
+                      const formattedDate = format(startsDate, "dd 'de' MMMM", { locale: ptBR });
+                      const formattedTime = format(startsDate, "HH:mm");
 
-                    <div className="flex justify-between items-center">
-                      <span className="text-zinc-500">Data e Hora:</span>
-                      <span className="font-semibold text-[#39ff14]">
-                        {formattedDate} às {formattedTime}
-                      </span>
-                    </div>
+                      const rawDigits = appt.client_phone.replace(/\D/g, "");
+                      const fullPhone = rawDigits.startsWith("55") ? rawDigits : `55${rawDigits}`;
+                      const waMessage = encodeURIComponent(
+                        `Olá ${appt.client_name}, confirmando seu agendamento no Studio Blackout para ${formattedDate} às ${formattedTime}.`
+                      );
+                      const waUrl = `https://wa.me/${fullPhone}?text=${waMessage}`;
+                      const isCanceled = appt.status === "cancelado";
 
-                    <div className="flex justify-between items-center">
-                      <span className="text-zinc-500">Valor:</span>
-                      <span className="font-bold text-white">{formatBRL(appt.price_cents)}</span>
-                    </div>
+                      return (
+                        <div
+                          key={appt.id}
+                          className={`relative flex flex-col justify-between rounded-2xl border p-5 transition-all ${
+                            isCanceled
+                              ? "border-red-500/20 bg-red-500/5 opacity-70"
+                              : "border-zinc-800 bg-zinc-900/60 hover:border-zinc-700"
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-start justify-between gap-2 mb-3">
+                              <div>
+                                <h3 className="text-base font-bold text-white leading-tight">{appt.client_name}</h3>
+                                <p className="text-xs text-zinc-400 flex items-center gap-1 mt-0.5">
+                                  <Phone className="h-3 w-3 text-zinc-500 shrink-0" />
+                                  {appt.client_phone}
+                                </p>
+                              </div>
+                              <StatusBadge status={appt.status} />
+                            </div>
 
-                    {role === "admin" && appt.barbers?.name && (
-                      <div className="flex justify-between items-center pt-1 border-t border-zinc-800/60">
-                        <span className="text-zinc-500">Barbeiro:</span>
-                        <span className="font-medium text-zinc-300">{appt.barbers.name}</span>
-                      </div>
-                    )}
+                            <div className="space-y-2 rounded-xl bg-zinc-950/60 p-3 text-xs border border-zinc-800/80 mb-4">
+                              <div className="flex justify-between items-center">
+                                <span className="text-zinc-500">Serviço:</span>
+                                <span className="font-semibold text-white">{appt.services?.name ?? "Serviço"}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-zinc-500">Data e Hora:</span>
+                                <span className="font-semibold text-[#39ff14]">
+                                  {formattedDate} às {formattedTime}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-zinc-500">Valor:</span>
+                                <span className="font-bold text-white">{formatBRL(appt.price_cents)}</span>
+                              </div>
+                              {role === "admin" && appt.barbers?.name && (
+                                <div className="flex justify-between items-center pt-1 border-t border-zinc-800/60">
+                                  <span className="text-zinc-500">Barbeiro:</span>
+                                  <span className="font-medium text-zinc-300">{appt.barbers.name}</span>
+                                </div>
+                              )}
+                              {appt.notes && (
+                                <div className="pt-1 text-[11px] text-zinc-400 italic">"{appt.notes}"</div>
+                              )}
+                            </div>
+                          </div>
 
-                    {appt.notes && (
-                      <div className="pt-1 text-[11px] text-zinc-400 italic">
-                        "{appt.notes}"
-                      </div>
-                    )}
+                          <div className="flex items-center gap-2 pt-2 border-t border-zinc-800/60">
+                            <a
+                              href={waUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 py-2 text-xs font-bold text-emerald-400 transition-all hover:bg-emerald-500/20 active:scale-95"
+                            >
+                              <MessageCircle className="h-4 w-4" />
+                              WhatsApp
+                            </a>
+                            {!isCanceled && (
+                              <button
+                                onClick={() => setEditModalAppt(appt)}
+                                className="flex items-center justify-center gap-1.5 rounded-xl bg-blue-500/10 border border-blue-500/30 px-3 py-2 text-xs font-bold text-blue-400 transition-all hover:bg-blue-500/20 active:scale-95"
+                                title="Editar serviço e valor"
+                              >
+                                <Pencil className="h-4 w-4" />
+                                Editar
+                              </button>
+                            )}
+                            {!isCanceled && (
+                              <button
+                                onClick={() => setCancelModalAppt(appt)}
+                                className="flex items-center justify-center gap-1.5 rounded-xl bg-red-500/10 border border-red-500/30 px-3 py-2 text-xs font-bold text-red-400 transition-all hover:bg-red-500/20 active:scale-95"
+                                title="Cancelar agendamento"
+                              >
+                                <XCircle className="h-4 w-4" />
+                                Cancelar
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-
-                {/* Actions Footer */}
-                <div className="flex items-center gap-2 pt-2 border-t border-zinc-800/60">
-                  {/* WhatsApp Action Button */}
-                  <a
-                    href={waUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 py-2 text-xs font-bold text-emerald-400 transition-all hover:bg-emerald-500/20 active:scale-95"
-                  >
-                    <MessageCircle className="h-4 w-4" />
-                    WhatsApp
-                  </a>
-
-                  {/* Editar Action Button */}
-                  {!isCanceled && (
-                    <button
-                      onClick={() => setEditModalAppt(appt)}
-                      className="flex items-center justify-center gap-1.5 rounded-xl bg-blue-500/10 border border-blue-500/30 px-3 py-2 text-xs font-bold text-blue-400 transition-all hover:bg-blue-500/20 active:scale-95"
-                      title="Editar serviço e valor"
-                    >
-                      <Pencil className="h-4 w-4" />
-                      Editar
-                    </button>
-                  )}
-
-                  {/* Cancel Action Button */}
-                  {!isCanceled && (
-                    <button
-                      onClick={() => setCancelModalAppt(appt)}
-                      className="flex items-center justify-center gap-1.5 rounded-xl bg-red-500/10 border border-red-500/30 px-3 py-2 text-xs font-bold text-red-400 transition-all hover:bg-red-500/20 active:scale-95"
-                      title="Cancelar agendamento"
-                    >
-                      <XCircle className="h-4 w-4" />
-                      Cancelar
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Edit Appointment Modal */}
       {editModalAppt && (
