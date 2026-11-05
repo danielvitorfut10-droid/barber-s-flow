@@ -144,7 +144,7 @@ export const getSiteData = createServerFn({ method: "GET" }).handler(async () =>
 });
 
 export const getAvailability = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => availabilitySchema.parse(data))
+  .validator((data: unknown) => availabilitySchema.parse(data))
   .handler(async ({ data }) => {
     const db = publicClient();
 
@@ -190,7 +190,7 @@ export const getAvailability = createServerFn({ method: "POST" })
   });
 
 export const createBooking = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => bookingSchema.parse(data))
+  .validator((data: unknown) => bookingSchema.parse(data))
   .handler(async ({ data }) => {
     const supabasePublic = publicClient();
     const { toIso } = await import("./format");
