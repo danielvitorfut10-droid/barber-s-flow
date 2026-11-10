@@ -78,6 +78,39 @@ export const STATUS_LABEL: Record<string, string> = {
   nao_compareceu: "Não compareceu",
 };
 
+/**
+ * Conclui o agendamento apenas quando a data/horário já tiver passado
+ * e não tiver sido cancelado pelo admin.
+ */
+export function resolveAppointmentStatus(
+  status: string,
+  startsAt: string | Date,
+  endsAt?: string | Date
+): "agendado" | "confirmado" | "concluido" | "cancelado" | "nao_compareceu" {
+  if (status === "cancelado") return "cancelado";
+  if (status === "nao_compareceu") return "nao_compareceu";
+
+  const now = new Date();
+  const start = typeof startsAt === "string" ? new Date(startsAt) : startsAt;
+  const end = endsAt
+    ? typeof endsAt === "string"
+      ? new Date(endsAt)
+      : endsAt
+    : new Date(start.getTime() + 30 * 60 * 1000);
+
+  // Se a data já passou e não foi cancelado, conclui o agendamento
+  if (end.getTime() <= now.getTime()) {
+    return "concluido";
+  }
+
+  // Se a data ainda não passou (futuro), não pode constar como concluído
+  if (status === "concluido") {
+    return "agendado";
+  }
+
+  return (status as any) || "agendado";
+}
+
 export const PAYMENT_LABEL: Record<string, string> = {
   dinheiro: "Dinheiro",
   pix: "PIX",

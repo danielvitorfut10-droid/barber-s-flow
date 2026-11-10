@@ -62,7 +62,7 @@ import {
 import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useBarberAuth } from "@/hooks/use-barber-auth";
-import { formatBRL } from "@/lib/format";
+import { formatBRL, resolveAppointmentStatus } from "@/lib/format";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/painel")({
@@ -521,7 +521,32 @@ function ReceitaTab({
       }
 
       const { data } = await q;
-      return (data ?? []) as Appointment[];
+      const rows = (data ?? []) as Appointment[];
+
+      // Identifica agendamentos com status desatualizado e sincroniza o banco
+      const toUpdateAgendado: string[] = [];
+      const toUpdateConcluido: string[] = [];
+
+      const resolved = rows.map((a) => {
+        const correctStatus = resolveAppointmentStatus(a.status, a.starts_at, a.ends_at);
+        if (correctStatus !== a.status) {
+          if (correctStatus === "agendado") toUpdateAgendado.push(a.id);
+          else if (correctStatus === "concluido") toUpdateConcluido.push(a.id);
+        }
+        return {
+          ...a,
+          status: correctStatus,
+        };
+      });
+
+      if (toUpdateAgendado.length > 0) {
+        supabase.from("appointments").update({ status: "agendado" }).in("id", toUpdateAgendado).then();
+      }
+      if (toUpdateConcluido.length > 0) {
+        supabase.from("appointments").update({ status: "concluido" }).in("id", toUpdateConcluido).then();
+      }
+
+      return resolved;
     },
     enabled: role !== null && !!barber?.id,
   });
@@ -1304,7 +1329,11 @@ function AgendamentosTab({
 
       if (barber?.id) q = q.eq("barber_id", barber.id);
       const { data } = await q;
-      return data ?? [];
+      const rows = data ?? [];
+      return rows.map((a: any) => ({
+        ...a,
+        status: resolveAppointmentStatus(a.status, a.starts_at, a.ends_at),
+      }));
     },
     enabled: role !== null && !!barber?.id,
   });
@@ -2077,7 +2106,32 @@ function ClientesTab({
       }
 
       const { data } = await q;
-      return (data ?? []) as Appointment[];
+      const rows = (data ?? []) as Appointment[];
+
+      // Identifica agendamentos com status desatualizado e sincroniza o banco
+      const toUpdateAgendado: string[] = [];
+      const toUpdateConcluido: string[] = [];
+
+      const resolved = rows.map((a) => {
+        const correctStatus = resolveAppointmentStatus(a.status, a.starts_at, a.ends_at);
+        if (correctStatus !== a.status) {
+          if (correctStatus === "agendado") toUpdateAgendado.push(a.id);
+          else if (correctStatus === "concluido") toUpdateConcluido.push(a.id);
+        }
+        return {
+          ...a,
+          status: correctStatus,
+        };
+      });
+
+      if (toUpdateAgendado.length > 0) {
+        supabase.from("appointments").update({ status: "agendado" }).in("id", toUpdateAgendado).then();
+      }
+      if (toUpdateConcluido.length > 0) {
+        supabase.from("appointments").update({ status: "concluido" }).in("id", toUpdateConcluido).then();
+      }
+
+      return resolved;
     },
     enabled: role !== null && !!barber?.id,
   });
@@ -2494,6 +2548,12 @@ function EditAppointmentModal({
         updatePayload.notes = notesInput.trim() ? `[Corte Mensal] ${notesInput.trim()}` : "Corte Mensal (Plano Mensal)";
       }
 
+      // Garante que o status reflita se a data/horário é futuro ou passado
+      if (appt.status !== "cancelado" && appt.status !== "nao_compareceu") {
+        const isFuture = newEnd.getTime() > Date.now();
+        (updatePayload as any).status = isFuture ? "agendado" : "concluido";
+      }
+
       const { error } = await supabase
         .from("appointments")
         .update(updatePayload)
@@ -2837,6 +2897,9 @@ function AddAppointmentModal({
           ? `${baseNotes} – ${slot.slotLabel}`
           : baseNotes;
 
+        const isFuture = endDate.getTime() > Date.now();
+        const initialStatus = isFuture ? "agendado" : "concluido";
+
         const { error } = await supabase.from("appointments").insert({
           barber_id: bId,
           service_id: targetServiceId,
@@ -2845,7 +2908,7 @@ function AddAppointmentModal({
           starts_at: startDate.toISOString(),
           ends_at: endDate.toISOString(),
           price_cents: priceCents,
-          status: "concluido",
+          status: initialStatus,
           notes: slotNotes,
         });
 
@@ -2877,8 +2940,8 @@ function AddAppointmentModal({
               <Plus className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white leading-tight">Adicionar Atendimento Realizado</h3>
-              <p className="text-xs text-zinc-400">Preencha os dados do atendimento concluído</p>
+              <h3 className="text-base font-bold text-white leading-tight">Adicionar Atendimento</h3>
+              <p className="text-xs text-zinc-400">Preencha os dados (concluído automaticamente após o horário)</p>
             </div>
           </div>
           <button onClick={onClose} className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white">
