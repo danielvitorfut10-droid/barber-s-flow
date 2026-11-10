@@ -1342,6 +1342,8 @@ function AgendamentosTab({
     },
   });
 
+  const [manuallyOpenedDays, setManuallyOpenedDays] = useState<Set<string>>(new Set());
+
   // Block mutation
   const blockMutation = useMutation({
     mutationFn: async ({ startsAt, endsAt, reason }: { startsAt: string; endsAt: string; reason?: string }) => {
@@ -1375,22 +1377,63 @@ function AgendamentosTab({
     onError: () => toast.error("Erro ao atualizar horário."),
   });
 
+  // Batch block / unblock mutations
+  const batchBlockMutation = useMutation({
+    mutationFn: async (slotsToInsert: { startsAt: string; endsAt: string; reason: string }[]) => {
+      if (!barber?.id) throw new Error("Barbeiro não encontrado.");
+      if (slotsToInsert.length === 0) return;
+      const rows = slotsToInsert.map((s) => ({
+        barber_id: barber.id,
+        starts_at: s.startsAt,
+        ends_at: s.endsAt,
+        reason: s.reason,
+      }));
+      const { error } = await supabase.from("blocked_slots").insert(rows);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["painel-blocked"] });
+      queryClient.invalidateQueries({ queryKey: ["site-data"] });
+      toast.success("Horários atualizados com sucesso!");
+    },
+    onError: () => toast.error("Erro ao atualizar horários."),
+  });
+
+  const batchDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (ids.length === 0) return;
+      const { error } = await supabase.from("blocked_slots").delete().in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["painel-blocked"] });
+      queryClient.invalidateQueries({ queryKey: ["site-data"] });
+      toast.success("Horários atualizados com sucesso!");
+    },
+    onError: () => toast.error("Erro ao atualizar horários."),
+  });
+
   // Calendar days
   const calStart = startOfWeek(startOfMonth(currentMonth), { weekStartsOn: 0 });
   const calEnd = endOfWeek(endOfMonth(currentMonth), { weekStartsOn: 0 });
   const calDays = eachDayOfInterval({ start: calStart, end: calEnd });
+
+  const selectedDayKey = selectedDay ? format(selectedDay, "yyyy-MM-dd") : "";
+  const selectedWeekday = selectedDay ? selectedDay.getDay() : 0;
+  const selectedDayHours = businessHours?.find((h) => h.weekday === selectedWeekday);
+  const isNormallyClosed = !selectedDayHours || Boolean(selectedDayHours.closed);
 
   // For selected day — build time slots starting from 06:00 AM up to 00:00 (midnight)
   const selectedDaySlots = (() => {
     if (!selectedDay) return [];
     const weekday = selectedDay.getDay();
     const hours = businessHours?.find((h) => h.weekday === weekday);
-    if (!hours || hours.closed) return [];
+    const isClosed = !hours || Boolean(hours.closed);
 
     const interval = 60;
-    const [openH] = hours.open_time.slice(0, 5).split(":").map(Number);
+    const openH = hours && !hours.closed ? Number(hours.open_time.slice(0, 5).split(":")[0]) : 9;
 
-    const slots: { time: string; iso: string; isNight: boolean; isEarly: boolean }[] = [];
+    const slots: { time: string; iso: string; isNight: boolean; isEarly: boolean; isClosedDay: boolean }[] = [];
     let h = 6;
     let m = 0;
     // Extend closing time to 23:59 so 23:30 slot ending at 00:00 is generated
@@ -1407,6 +1450,7 @@ function AgendamentosTab({
         iso,
         isNight: h >= 19,
         isEarly: h < openH,
+        isClosedDay: isClosed,
       });
       m += interval;
       if (m >= 60) {
@@ -1418,11 +1462,117 @@ function AgendamentosTab({
     return slots;
   })();
 
+  const dayUnblockedSlots = selectedDay
+    ? blockedSlots.filter((b) => b.reason === "desbloqueado" && isSameDay(parseISO(b.starts_at), selectedDay))
+    : [];
+  const dayAppointments = selectedDay
+    ? appointments.filter((a) => isSameDay(parseISO(a.starts_at), selectedDay))
+    : [];
+
+  const isDayOpen = !isNormallyClosed || manuallyOpenedDays.has(selectedDayKey) || dayUnblockedSlots.length > 0 || dayAppointments.length > 0;
+
+  const handleOpenDay = (key: string) => {
+    setManuallyOpenedDays((prev) => new Set(prev).add(key));
+    toast.success("Atendimento aberto para este dia! Os horários iniciam bloqueados de momento; libere os horários desejados abaixo.");
+  };
+
+  const handleCloseDay = async (key: string) => {
+    const idsToDelete = dayUnblockedSlots.map((b) => b.id);
+    if (idsToDelete.length > 0) {
+      await batchDeleteMutation.mutateAsync(idsToDelete);
+    }
+    setManuallyOpenedDays((prev) => {
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+    toast.success("Dia fechado para atendimento.");
+  };
+
+  const handleUnlockCommercial = async () => {
+    if (!selectedDay) return;
+    const commercialSlots = selectedDaySlots.filter((s) => {
+      const h = Number(s.time.split(":")[0]);
+      return h >= 9 && h <= 18;
+    });
+
+    const slotsToInsert: { startsAt: string; endsAt: string; reason: string }[] = [];
+    for (const s of commercialSlots) {
+      const slotDate = new Date(s.iso);
+      const slotEnd = new Date(slotDate.getTime() + 60 * 60 * 1000);
+      const isAlreadyUnblocked = dayUnblockedSlots.some(
+        (b) => parseISO(b.starts_at).getHours() === slotDate.getHours()
+      );
+      const hasAppt = dayAppointments.some((a) => {
+        const aStart = parseISO(a.starts_at);
+        const aEnd = parseISO(a.ends_at);
+        return slotDate >= aStart && slotDate < aEnd;
+      });
+      if (!isAlreadyUnblocked && !hasAppt) {
+        slotsToInsert.push({
+          startsAt: slotDate.toISOString(),
+          endsAt: slotEnd.toISOString(),
+          reason: "desbloqueado",
+        });
+      }
+    }
+
+    if (slotsToInsert.length > 0) {
+      await batchBlockMutation.mutateAsync(slotsToInsert);
+    } else {
+      toast.info("Os horários comerciais já estão liberados.");
+    }
+  };
+
+  const handleUnlockAll = async () => {
+    if (!selectedDay) return;
+    const slotsToInsert: { startsAt: string; endsAt: string; reason: string }[] = [];
+    for (const s of selectedDaySlots) {
+      const slotDate = new Date(s.iso);
+      const slotEnd = new Date(slotDate.getTime() + 60 * 60 * 1000);
+      const isAlreadyUnblocked = dayUnblockedSlots.some(
+        (b) => parseISO(b.starts_at).getHours() === slotDate.getHours()
+      );
+      const hasAppt = dayAppointments.some((a) => {
+        const aStart = parseISO(a.starts_at);
+        const aEnd = parseISO(a.ends_at);
+        return slotDate >= aStart && slotDate < aEnd;
+      });
+      if (!isAlreadyUnblocked && !hasAppt) {
+        slotsToInsert.push({
+          startsAt: slotDate.toISOString(),
+          endsAt: slotEnd.toISOString(),
+          reason: "desbloqueado",
+        });
+      }
+    }
+
+    if (slotsToInsert.length > 0) {
+      await batchBlockMutation.mutateAsync(slotsToInsert);
+    } else {
+      toast.info("Todos os horários já estão liberados.");
+    }
+  };
+
+  const handleBlockAll = async () => {
+    const idsToDelete = dayUnblockedSlots.map((b) => b.id);
+    if (idsToDelete.length > 0) {
+      await batchDeleteMutation.mutateAsync(idsToDelete);
+    } else {
+      toast.info("Todos os horários já estão bloqueados.");
+    }
+  };
+
   // Day dot indicators
   function getDayInfo(day: Date) {
     const booked = appointments.filter((a) => isSameDay(parseISO(a.starts_at), day));
-    const blocked = blockedSlots.filter((b) => isSameDay(parseISO(b.starts_at), day));
-    return { booked: booked.length, blocked: blocked.length };
+    const actualBlocked = blockedSlots.filter(
+      (b) => b.reason !== "desbloqueado" && isSameDay(parseISO(b.starts_at), day)
+    );
+    const unblocked = blockedSlots.filter(
+      (b) => b.reason === "desbloqueado" && isSameDay(parseISO(b.starts_at), day)
+    );
+    return { booked: booked.length, blocked: actualBlocked.length, unblocked: unblocked.length };
   }
 
   return (
@@ -1477,7 +1627,7 @@ function AgendamentosTab({
           {/* Days */}
           <div className="grid grid-cols-7 gap-1">
             {calDays.map((day) => {
-              const { booked, blocked } = getDayInfo(day);
+              const { booked, blocked, unblocked } = getDayInfo(day);
               const isSelected = selectedDay && isSameDay(day, selectedDay);
               const isCurrentMonth = isSameMonth(day, currentMonth);
               const today = isToday(day);
@@ -1498,16 +1648,24 @@ function AgendamentosTab({
                 >
                   <span>{format(day, "d")}</span>
                   {/* Dots */}
-                  {isCurrentMonth && (booked > 0 || blocked > 0) && (
+                  {isCurrentMonth && (booked > 0 || blocked > 0 || unblocked > 0) && (
                     <div className="flex gap-0.5">
                       {booked > 0 && (
                         <span
                           className={`h-1 w-1 rounded-full ${isSelected ? "bg-black/60" : "bg-emerald-400"}`}
+                          title={`${booked} agendamento(s)`}
+                        />
+                      )}
+                      {unblocked > 0 && booked === 0 && (
+                        <span
+                          className={`h-1 w-1 rounded-full ${isSelected ? "bg-black/60" : "bg-[#39ff14]"}`}
+                          title={`${unblocked} horário(s) liberado(s)`}
                         />
                       )}
                       {blocked > 0 && (
                         <span
                           className={`h-1 w-1 rounded-full ${isSelected ? "bg-black/60" : "bg-red-400"}`}
+                          title={`${blocked} horário(s) bloqueado(s)`}
                         />
                       )}
                     </div>
@@ -1518,9 +1676,12 @@ function AgendamentosTab({
           </div>
 
           {/* Legend */}
-          <div className="mt-4 flex gap-4 text-xs text-zinc-500">
+          <div className="mt-4 flex flex-wrap gap-4 text-xs text-zinc-500">
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-emerald-400" /> Agendado
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-[#39ff14]" /> Liberado
             </span>
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-red-400" /> Bloqueado
@@ -1536,196 +1697,346 @@ function AgendamentosTab({
             </div>
           ) : (
             <>
-              <h3 className="mb-1 text-sm font-bold text-white">
-                {format(selectedDay, "EEEE, dd 'de' MMMM", { locale: ptBR })}
-              </h3>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+                <div>
+                  <h3 className="text-sm font-bold capitalize text-white">
+                    {format(selectedDay, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                  </h3>
+                  <p className="text-[11px] text-zinc-400">
+                    {isNormallyClosed ? (
+                      <span className="text-amber-400 font-medium">
+                        Dia fechado por padrão ({selectedWeekday === 0 ? "Domingo" : "Segunda-feira"})
+                      </span>
+                    ) : (
+                      "Horário regular de funcionamento"
+                    )}
+                  </p>
+                </div>
+                {isNormallyClosed && isDayOpen && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#39ff14]/10 border border-[#39ff14]/30 px-2 py-0.5 text-[10px] font-bold text-[#39ff14]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#39ff14] animate-pulse" />
+                    Atendimento Aberto
+                  </span>
+                )}
+              </div>
 
-              {(() => {
-                const weekday = selectedDay.getDay();
-                const hours = businessHours?.find((h) => h.weekday === weekday);
-                if (!hours || hours.closed) {
-                  return (
-                    <div className="mt-6 flex flex-col items-center justify-center gap-2 text-zinc-600">
-                      <X className="h-8 w-8 text-zinc-700" />
-                      <p className="text-sm">Dia fechado para atendimento</p>
-                    </div>
-                  );
-                }
-
-                return (
-                  <>
-                    <p className="mb-5 text-xs text-zinc-500">
-                      06:00 – 00:00 • Intervalos de 1 em 1 hora
+              {isNormallyClosed && !isDayOpen ? (
+                <div className="mt-8 flex flex-col items-center justify-center gap-3 text-center rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-800 text-zinc-500">
+                    <X className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">Dia fechado para atendimento</h4>
+                    <p className="mt-1 text-xs text-zinc-400 max-w-xs">
+                      {selectedWeekday === 0 ? "Domingos" : "Segundas-feiras"} estão indisponíveis para agendamentos por padrão. Você pode abrir o atendimento neste dia e gerenciar os horários.
                     </p>
-                    <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
-                      {selectedDaySlots.map((slot) => {
-                        const slotDate = new Date(slot.iso);
-                        const slotEnd = new Date(slotDate.getTime() + 60 * 60 * 1000);
+                  </div>
+                  <button
+                    onClick={() => handleOpenDay(selectedDayKey)}
+                    className="mt-2 flex items-center gap-2 rounded-xl bg-[#39ff14] px-4 py-2 text-xs font-bold text-black shadow-lg shadow-[#39ff14]/20 transition-all hover:bg-[#32e012] active:scale-95"
+                  >
+                    <Unlock className="h-4 w-4" />
+                    Abrir atendimento neste dia
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {isNormallyClosed && (
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
+                      <div className="flex items-center gap-2">
+                        <span className="relative flex h-2 w-2">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                        </span>
+                        <div>
+                          <p className="text-xs font-bold text-emerald-300">Atendimento liberado para este dia</p>
+                          <p className="text-[10px] text-emerald-400/80">
+                            {dayUnblockedSlots.length > 0
+                              ? `${dayUnblockedSlots.length} horário(s) liberado(s) para clientes`
+                              : "Horários bloqueados de momento (libere os horários desejados abaixo)"}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleCloseDay(selectedDayKey)}
+                        disabled={batchDeleteMutation.isPending}
+                        className="flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[11px] font-bold text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+                      >
+                        <Lock className="h-3 w-3" />
+                        Fechar dia
+                      </button>
+                    </div>
+                  )}
 
-                        // Check appointment
-                        const appt = appointments.find((a) => {
-                          const aStart = parseISO(a.starts_at);
-                          const aEnd = parseISO(a.ends_at);
-                          return slotDate >= aStart && slotDate < aEnd;
-                        });
+                  {/* Ações rápidas */}
+                  <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                    <button
+                      onClick={handleUnlockCommercial}
+                      disabled={batchBlockMutation.isPending}
+                      className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/80 px-2.5 py-1 text-[11px] font-medium text-zinc-300 transition-all hover:border-[#39ff14]/40 hover:text-[#39ff14] disabled:opacity-50"
+                    >
+                      <Clock className="h-3 w-3" />
+                      Liberar Comercial (09h - 18h)
+                    </button>
+                    <button
+                      onClick={handleUnlockAll}
+                      disabled={batchBlockMutation.isPending}
+                      className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/80 px-2.5 py-1 text-[11px] font-medium text-zinc-300 transition-all hover:border-emerald-500/40 hover:text-emerald-400 disabled:opacity-50"
+                    >
+                      <Unlock className="h-3 w-3" />
+                      Liberar Todos
+                    </button>
+                    <button
+                      onClick={handleBlockAll}
+                      disabled={batchDeleteMutation.isPending}
+                      className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/80 px-2.5 py-1 text-[11px] font-medium text-zinc-300 transition-all hover:border-red-500/40 hover:text-red-400 disabled:opacity-50"
+                    >
+                      <Lock className="h-3 w-3" />
+                      Bloquear Todos
+                    </button>
+                  </div>
 
-                        // Check blocked
-                        const block = blockedSlots.find((b) => {
-                          const bStart = parseISO(b.starts_at);
-                          const bEnd = parseISO(b.ends_at);
-                          return slotDate >= bStart && slotDate < bEnd;
-                        });
+                  <p className="mb-4 text-[11px] text-zinc-500">
+                    {isNormallyClosed
+                      ? "06:00 – 00:00 • Horários mantidos bloqueados de momento. Desbloqueie os horários que você atenderá."
+                      : "06:00 – 00:00 • Intervalos de 1 em 1 hora"}
+                  </p>
 
-                        if (appt) {
+                  <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
+                    {selectedDaySlots.map((slot) => {
+                      const slotDate = new Date(slot.iso);
+                      const slotEnd = new Date(slotDate.getTime() + 60 * 60 * 1000);
+
+                      // Check appointment
+                      const appt = appointments.find((a) => {
+                        const aStart = parseISO(a.starts_at);
+                        const aEnd = parseISO(a.ends_at);
+                        return slotDate >= aStart && slotDate < aEnd;
+                      });
+
+                      // Check blocked
+                      const block = blockedSlots.find((b) => {
+                        const bStart = parseISO(b.starts_at);
+                        const bEnd = parseISO(b.ends_at);
+                        return slotDate >= bStart && slotDate < bEnd;
+                      });
+
+                      if (appt) {
+                        return (
+                          <div
+                            key={slot.iso}
+                            className="flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5"
+                          >
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                              <div>
+                                <p className="text-xs font-bold text-emerald-300">{slot.time}</p>
+                                <p className="text-[10px] text-emerald-500/80">{appt.client_name}</p>
+                              </div>
+                            </div>
+                            <span className="text-[10px] text-zinc-500 truncate max-w-[80px]">
+                              {(appt as any).services?.name}
+                            </span>
+                          </div>
+                        );
+                      }
+
+                      // Se for dia normalmente fechado (domingos e segundas)
+                      if (isNormallyClosed) {
+                        const isUnblocked = block?.reason === "desbloqueado";
+
+                        if (isUnblocked && block) {
                           return (
                             <div
                               key={slot.iso}
-                              className="flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5"
+                              className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5"
                             >
                               <div className="flex items-center gap-2">
-                                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                <Clock className="h-4 w-4 text-emerald-400 shrink-0" />
                                 <div>
                                   <p className="text-xs font-bold text-emerald-300">{slot.time}</p>
-                                  <p className="text-[10px] text-emerald-500/80">{appt.client_name}</p>
+                                  <p className="text-[10px] text-emerald-400/70">Liberado para agendamento</p>
                                 </div>
-                              </div>
-                              <span className="text-[10px] text-zinc-500 truncate max-w-[80px]">
-                                {(appt as any).services?.name}
-                              </span>
-                            </div>
-                          );
-                        }
-
-                        // Morning (< 09:00) or Night (>= 19:00) slot: Blocked by default unless block?.reason === 'desbloqueado'
-                        if (slot.isEarly || slot.isNight) {
-                          const isUnblocked = block?.reason === "desbloqueado";
-                          const label = slot.isEarly ? "Manhã" : "Noturno";
-
-                          if (isUnblocked && block) {
-                            return (
-                              <div
-                                key={slot.iso}
-                                className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5"
-                              >
-                                <div className="flex items-center gap-2">
-                                  <Clock className="h-4 w-4 text-emerald-400 shrink-0" />
-                                  <div>
-                                    <p className="text-xs font-bold text-emerald-300">{slot.time}</p>
-                                    <p className="text-[10px] text-emerald-400/70">{label} (Liberado)</p>
-                                  </div>
-                                </div>
-                                <button
-                                  onClick={() => unblockMutation.mutate(block.id)}
-                                  disabled={unblockMutation.isPending}
-                                  className="flex items-center gap-1 rounded-lg border border-red-500/40 bg-red-500/10 px-2 py-1 text-[10px] font-bold text-red-400 transition-all hover:bg-red-500/20 disabled:opacity-50"
-                                >
-                                  {unblockMutation.isPending ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  ) : (
-                                    <Lock className="h-3 w-3" />
-                                  )}
-                                  Bloquear
-                                </button>
-                              </div>
-                            );
-                          }
-
-                          return (
-                            <div
-                              key={slot.iso}
-                              className="flex items-center justify-between rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2.5"
-                            >
-                              <div className="flex items-center gap-2">
-                                <Lock className="h-4 w-4 text-red-400 shrink-0" />
-                                <div>
-                                  <p className="text-xs font-bold text-red-300">{slot.time}</p>
-                                  <p className="text-[10px] text-red-400/70">{label} (Bloqueado)</p>
-                                </div>
-                              </div>
-                              <button
-                                onClick={() =>
-                                  blockMutation.mutate({
-                                    startsAt: slotDate.toISOString(),
-                                    endsAt: slotEnd.toISOString(),
-                                    reason: "desbloqueado",
-                                  })
-                                }
-                                disabled={blockMutation.isPending}
-                                className="flex items-center gap-1 rounded-lg border border-[#39ff14]/30 bg-[#39ff14]/10 px-2 py-1 text-[10px] font-bold text-[#39ff14] transition-all hover:bg-[#39ff14]/20 disabled:opacity-50"
-                              >
-                                {blockMutation.isPending ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <Unlock className="h-3 w-3" />
-                                )}
-                                Desbloquear
-                              </button>
-                            </div>
-                          );
-                        }
-
-                        // Daytime slot (< 19:00)
-                        if (block && block.reason !== "desbloqueado") {
-                          return (
-                            <div
-                              key={slot.iso}
-                              className="flex items-center justify-between rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2.5"
-                            >
-                              <div className="flex items-center gap-2">
-                                <Lock className="h-4 w-4 text-red-400 shrink-0" />
-                                <p className="text-xs font-bold text-red-300">{slot.time}</p>
                               </div>
                               <button
                                 onClick={() => unblockMutation.mutate(block.id)}
                                 disabled={unblockMutation.isPending}
-                                className="flex items-center gap-1 rounded-lg border border-zinc-700 px-2 py-1 text-[10px] font-bold text-zinc-400 transition-all hover:border-[#39ff14]/40 hover:text-[#39ff14] disabled:opacity-50"
+                                className="flex items-center gap-1 rounded-lg border border-red-500/40 bg-red-500/10 px-2 py-1 text-[10px] font-bold text-red-400 transition-all hover:bg-red-500/20 disabled:opacity-50"
                               >
                                 {unblockMutation.isPending ? (
                                   <Loader2 className="h-3 w-3 animate-spin" />
                                 ) : (
-                                  <Unlock className="h-3 w-3" />
+                                  <Lock className="h-3 w-3" />
                                 )}
-                                Desbloquear
+                                Bloquear
                               </button>
                             </div>
                           );
                         }
 
-                        // Free daytime slot (< 19:00)
                         return (
                           <div
                             key={slot.iso}
-                            className="flex items-center justify-between rounded-xl border border-zinc-800/60 bg-zinc-900 px-3 py-2.5"
+                            className="flex items-center justify-between rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2.5"
                           >
                             <div className="flex items-center gap-2">
-                              <Clock className="h-4 w-4 text-zinc-600 shrink-0" />
-                              <p className="text-xs font-medium text-zinc-400">{slot.time}</p>
+                              <Lock className="h-4 w-4 text-red-400 shrink-0" />
+                              <div>
+                                <p className="text-xs font-bold text-red-300">{slot.time}</p>
+                                <p className="text-[10px] text-red-400/70">Bloqueado de momento</p>
+                              </div>
                             </div>
                             <button
                               onClick={() =>
                                 blockMutation.mutate({
                                   startsAt: slotDate.toISOString(),
                                   endsAt: slotEnd.toISOString(),
-                                  reason: "Bloqueado pelo barbeiro",
+                                  reason: "desbloqueado",
                                 })
                               }
                               disabled={blockMutation.isPending}
-                              className="flex items-center gap-1 rounded-lg border border-zinc-700 px-2 py-1 text-[10px] font-bold text-zinc-500 transition-all hover:border-red-500/40 hover:bg-red-500/5 hover:text-red-400 disabled:opacity-50"
+                              className="flex items-center gap-1 rounded-lg border border-[#39ff14]/30 bg-[#39ff14]/10 px-2 py-1 text-[10px] font-bold text-[#39ff14] transition-all hover:bg-[#39ff14]/20 disabled:opacity-50"
                             >
                               {blockMutation.isPending ? (
                                 <Loader2 className="h-3 w-3 animate-spin" />
                               ) : (
-                                <Lock className="h-3 w-3" />
+                                <Unlock className="h-3 w-3" />
                               )}
-                              Bloquear
+                              Desbloquear
                             </button>
                           </div>
                         );
-                      })}
-                    </div>
-                  </>
-                );
-              })()}
+                      }
+
+                      // Dia normal de funcionamento: Morning (< 09:00) or Night (>= 19:00)
+                      if (slot.isEarly || slot.isNight) {
+                        const isUnblocked = block?.reason === "desbloqueado";
+                        const label = slot.isEarly ? "Manhã" : "Noturno";
+
+                        if (isUnblocked && block) {
+                          return (
+                            <div
+                              key={slot.iso}
+                              className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5"
+                            >
+                              <div className="flex items-center gap-2">
+                                <Clock className="h-4 w-4 text-emerald-400 shrink-0" />
+                                <div>
+                                  <p className="text-xs font-bold text-emerald-300">{slot.time}</p>
+                                  <p className="text-[10px] text-emerald-400/70">{label} (Liberado)</p>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => unblockMutation.mutate(block.id)}
+                                disabled={unblockMutation.isPending}
+                                className="flex items-center gap-1 rounded-lg border border-red-500/40 bg-red-500/10 px-2 py-1 text-[10px] font-bold text-red-400 transition-all hover:bg-red-500/20 disabled:opacity-50"
+                              >
+                                {unblockMutation.isPending ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Lock className="h-3 w-3" />
+                                )}
+                                Bloquear
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div
+                            key={slot.iso}
+                            className="flex items-center justify-between rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2.5"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Lock className="h-4 w-4 text-red-400 shrink-0" />
+                              <div>
+                                <p className="text-xs font-bold text-red-300">{slot.time}</p>
+                                <p className="text-[10px] text-red-400/70">{label} (Bloqueado)</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() =>
+                                blockMutation.mutate({
+                                  startsAt: slotDate.toISOString(),
+                                  endsAt: slotEnd.toISOString(),
+                                  reason: "desbloqueado",
+                                })
+                              }
+                              disabled={blockMutation.isPending}
+                              className="flex items-center gap-1 rounded-lg border border-[#39ff14]/30 bg-[#39ff14]/10 px-2 py-1 text-[10px] font-bold text-[#39ff14] transition-all hover:bg-[#39ff14]/20 disabled:opacity-50"
+                            >
+                              {blockMutation.isPending ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Unlock className="h-3 w-3" />
+                              )}
+                              Desbloquear
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      // Dia normal: Daytime slot (< 19:00 e >= 09:00)
+                      if (block && block.reason !== "desbloqueado") {
+                        return (
+                          <div
+                            key={slot.iso}
+                            className="flex items-center justify-between rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2.5"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Lock className="h-4 w-4 text-red-400 shrink-0" />
+                              <p className="text-xs font-bold text-red-300">{slot.time}</p>
+                            </div>
+                            <button
+                              onClick={() => unblockMutation.mutate(block.id)}
+                              disabled={unblockMutation.isPending}
+                              className="flex items-center gap-1 rounded-lg border border-zinc-700 px-2 py-1 text-[10px] font-bold text-zinc-400 transition-all hover:border-[#39ff14]/40 hover:text-[#39ff14] disabled:opacity-50"
+                            >
+                              {unblockMutation.isPending ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Unlock className="h-3 w-3" />
+                              )}
+                              Desbloquear
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      // Dia normal: Free daytime slot (< 19:00)
+                      return (
+                        <div
+                          key={slot.iso}
+                          className="flex items-center justify-between rounded-xl border border-zinc-800/60 bg-zinc-900 px-3 py-2.5"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-zinc-600 shrink-0" />
+                            <p className="text-xs font-medium text-zinc-400">{slot.time}</p>
+                          </div>
+                          <button
+                            onClick={() =>
+                              blockMutation.mutate({
+                                startsAt: slotDate.toISOString(),
+                                endsAt: slotEnd.toISOString(),
+                                reason: "Bloqueado pelo barbeiro",
+                              })
+                            }
+                            disabled={blockMutation.isPending}
+                            className="flex items-center gap-1 rounded-lg border border-zinc-700 px-2 py-1 text-[10px] font-bold text-zinc-500 transition-all hover:border-red-500/40 hover:bg-red-500/5 hover:text-red-400 disabled:opacity-50"
+                          >
+                            {blockMutation.isPending ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Lock className="h-3 w-3" />
+                            )}
+                            Bloquear
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>

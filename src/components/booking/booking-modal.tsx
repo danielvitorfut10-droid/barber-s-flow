@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { supabase } from "@/integrations/supabase/client";
 import {
   ArrowLeft,
   CalendarDays,
@@ -71,6 +73,31 @@ export function BookingModal({ open, onOpenChange }: Props) {
     [site],
   );
 
+  // Busca horários que o barbeiro liberou extraordinariamente (por exemplo em domingos ou segundas)
+  const { data: barberUnblockedSlots = [] } = useQuery({
+    queryKey: ["barber-unblocked-dates", barberId],
+    enabled: Boolean(open && barberId),
+    queryFn: async () => {
+      if (!barberId) return [];
+      const { data } = await supabase
+        .from("blocked_slots")
+        .select("starts_at")
+        .eq("barber_id", barberId)
+        .eq("reason", "desbloqueado")
+        .gte("starts_at", new Date().toISOString());
+      return data ?? [];
+    },
+  });
+
+  const unblockedDatesSet = useMemo(() => {
+    const s = new Set<string>();
+    for (const item of barberUnblockedSlots) {
+      const d = parseISO(item.starts_at);
+      s.add(toDateKey(d));
+    }
+    return s;
+  }, [barberUnblockedSlots]);
+
   const isDateDisabled = (d: Date) => {
     const dKey = toDateKey(d);
     const todayKey = getTodayDateKey();
@@ -82,7 +109,15 @@ export function BookingModal({ open, onOpenChange }: Props) {
     if (dKey > maxKey) return true;
 
     const weekday = d.getDay();
-    return closedWeekdays.has(weekday);
+    const isNormallyClosed = closedWeekdays.has(weekday);
+
+    // Se for dia fechado por padrão (domingo ou segunda),
+    // só desabilita se o barbeiro NÃO tiver liberado horários nesta data
+    if (isNormallyClosed) {
+      return !unblockedDatesSet.has(dKey);
+    }
+
+    return false;
   };
 
   const slotsQuery = useQuery({

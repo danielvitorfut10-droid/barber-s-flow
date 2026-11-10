@@ -162,8 +162,9 @@ export const getAvailability = createServerFn({ method: "POST" })
       db.from("settings").select("slot_interval_min").eq("id", 1).maybeSingle(),
     ]);
 
-    if (!service || !hour || hour.closed) return { slots: [] as { time: string; iso: string }[] };
+    if (!service) return { slots: [] as { time: string; iso: string }[] };
 
+    const isClosedDay = !hour || Boolean(hour.closed);
     const range = dayRange(data.date);
     const { data: busyRows } = await db.rpc("get_public_busy", {
       _barber_id: data.barberId,
@@ -176,14 +177,23 @@ export const getAvailability = createServerFn({ method: "POST" })
       .map((r) => new Date(r.starts_at).getTime());
     const busy = rows.filter((r) => r.kind !== "unblocked");
 
+    // Se for dia fechado por padrão (domingo ou segunda), só gera horários se o barbeiro tiver liberado horários
+    if (isClosedDay && unblockedNightStarts.length === 0) {
+      return { slots: [] as { time: string; iso: string }[] };
+    }
+
+    const openTime = hour && !hour.closed ? String(hour.open_time).slice(0, 5) : "06:00";
+    const closeTime = hour && !hour.closed ? String(hour.close_time).slice(0, 5) : "23:59";
+
     const slots = buildSlots({
       dateStr: data.date,
-      openTime: String(hour.open_time).slice(0, 5),
-      closeTime: String(hour.close_time).slice(0, 5),
+      openTime,
+      closeTime,
       intervalMin: 60,
       durationMin: service.duration_min,
       busy: toIntervals(busy),
       unblockedNightStarts,
+      isClosedDay,
     });
 
     return { slots };

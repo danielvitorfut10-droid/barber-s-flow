@@ -31,9 +31,10 @@ export function buildSlots(params: {
   busy: Interval[];
   unblockedNightStarts?: number[];
   unblockedStarts?: number[];
+  isClosedDay?: boolean;
   now?: Date;
 }): Slot[] {
-  const { dateStr, openTime, intervalMin, durationMin, busy } = params;
+  const { dateStr, openTime, intervalMin, durationMin, busy, isClosedDay } = params;
   const unblockedStarts = params.unblockedStarts ?? params.unblockedNightStarts ?? [];
   const now = params.now ?? new Date();
   // Antecedência mínima de 10 minutos para agendamentos no mesmo dia
@@ -54,8 +55,9 @@ export function buildSlots(params: {
     if (start < minStart) continue;
 
     // Slots before open time (< open, e.g. 06:00-09:00) OR from 19:00 onwards (>= 1140)
+    // OR any slot on a normally closed day (isClosedDay)
     // are blocked by default unless explicitly unblocked (reason = 'desbloqueado')
-    if (m < open || m >= 1140) {
+    if (isClosedDay || m < open || m >= 1140) {
       const isUnblocked = unblockedStarts.some((t) => Math.abs(t - start) < 60000);
       if (!isUnblocked) continue;
     }
