@@ -81,6 +81,7 @@ export const getSiteData = createServerFn({ method: "GET" }).handler(async () =>
       return {
         ...s,
         price_cents: 6000,
+        duration_min: 60,
         sort_order: 5,
       };
     }
@@ -90,6 +91,7 @@ export const getSiteData = createServerFn({ method: "GET" }).handler(async () =>
         name: "Corte + barba + sobrancelha",
         price_cents: 7000,
         description: "Combo completo de corte, barba e sobrancelha.",
+        duration_min: 60,
         sort_order: 6,
       };
     }
@@ -109,7 +111,7 @@ export const getSiteData = createServerFn({ method: "GET" }).handler(async () =>
       name: "Corte + barba + sobrancelha",
       description: "Combo completo de corte, barba e sobrancelha.",
       price_cents: 7000,
-      duration_min: 75,
+      duration_min: 60,
       sort_order: 6,
     });
   }
@@ -148,10 +150,26 @@ export const getAvailability = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const db = publicClient();
 
+    // Bloqueio do barbeiro Lemuel / Lemoel: todos os horários ficam indisponíveis
+    const { data: barber } = await db
+      .from("barbers")
+      .select("id, name")
+      .eq("id", data.barberId)
+      .maybeSingle();
+
+    const isLemuel =
+      barber?.name?.toLowerCase().includes("lemuel") ||
+      barber?.name?.toLowerCase().includes("lemoel") ||
+      data.barberId === "2835dcee-ce42-454c-89d4-2473f6fc421e";
+
+    if (isLemuel) {
+      return { slots: [] as { time: string; iso: string }[] };
+    }
+
     const [{ data: service }, { data: hour }, { data: settings }] = await Promise.all([
       db
         .from("services")
-        .select("duration_min")
+        .select("duration_min, name")
         .eq("id", data.serviceId)
         .maybeSingle(),
       db
@@ -163,6 +181,12 @@ export const getAvailability = createServerFn({ method: "POST" })
     ]);
 
     if (!service) return { slots: [] as { time: string; iso: string }[] };
+
+    let durationMin = service.duration_min;
+    const sName = (service.name || "").toLowerCase();
+    if (sName.includes("corte") && sName.includes("barba")) {
+      durationMin = 60;
+    }
 
     const isClosedDay = !hour || Boolean(hour.closed);
     const range = dayRange(data.date);
@@ -190,7 +214,7 @@ export const getAvailability = createServerFn({ method: "POST" })
       openTime,
       closeTime,
       intervalMin: 60,
-      durationMin: service.duration_min,
+      durationMin,
       busy: toIntervals(busy),
       unblockedNightStarts,
       isClosedDay,
@@ -203,6 +227,26 @@ export const createBooking = createServerFn({ method: "POST" })
   .validator((data: unknown) => bookingSchema.parse(data))
   .handler(async ({ data }) => {
     const supabasePublic = publicClient();
+
+    // Bloqueio de agendamento para o barbeiro Lemuel / Lemoel
+    const { data: barber } = await supabasePublic
+      .from("barbers")
+      .select("id, name")
+      .eq("id", data.barberId)
+      .maybeSingle();
+
+    const isLemuel =
+      barber?.name?.toLowerCase().includes("lemuel") ||
+      barber?.name?.toLowerCase().includes("lemoel") ||
+      data.barberId === "2835dcee-ce42-454c-89d4-2473f6fc421e";
+
+    if (isLemuel) {
+      return {
+        ok: false as const,
+        error: "O barbeiro Lemuel está com todos os horários bloqueados no momento. Por favor, escolha outro profissional.",
+      };
+    }
+
     const { toIso } = await import("./format");
     const startsAt = new Date(toIso(data.date, data.time));
     if (Number.isNaN(startsAt.getTime())) {

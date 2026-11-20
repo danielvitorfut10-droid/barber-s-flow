@@ -99,6 +99,12 @@ export function BookingModal({ open, onOpenChange }: Props) {
   }, [barberUnblockedSlots]);
 
   const isDateDisabled = (d: Date) => {
+    const isLemuel =
+      barber?.name?.toLowerCase().includes("lemuel") ||
+      barber?.name?.toLowerCase().includes("lemoel") ||
+      barberId === "2835dcee-ce42-454c-89d4-2473f6fc421e";
+    if (isLemuel) return true;
+
     const dKey = toDateKey(d);
     const todayKey = getTodayDateKey();
 
@@ -228,37 +234,55 @@ export function BookingModal({ open, onOpenChange }: Props) {
                 <div className="flex flex-col gap-3">
                   {!site
                     ? [0, 1].map((i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)
-                    : site.barbers.map((b) => (
-                        <button
-                          key={b.id}
-                          type="button"
-                          onClick={() => {
-                            setBarberId(b.id);
-                            setStep(1);
-                          }}
-                          className={cn(
-                            "flex items-center gap-3 sm:gap-4 rounded-xl border border-border bg-card p-3.5 sm:p-4 text-left transition-all hover:border-foreground/40 hover:bg-accent/60 w-full min-w-0",
-                            barberId === b.id && "border-foreground bg-accent/80 ring-1 ring-foreground",
-                          )}
-                        >
-                          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-secondary font-display text-lg font-bold">
-                            {b.name.charAt(0)}
-                          </span>
-                          <span className="flex-1 min-w-0 overflow-hidden">
-                            <span className="block font-display text-sm sm:text-base font-semibold text-foreground truncate">
-                              {b.name}
+                    : site.barbers.map((b) => {
+                        const isLemuel =
+                          b.name.toLowerCase().includes("lemuel") ||
+                          b.name.toLowerCase().includes("lemoel") ||
+                          b.id === "2835dcee-ce42-454c-89d4-2473f6fc421e";
+                        return (
+                          <button
+                            key={b.id}
+                            type="button"
+                            onClick={() => {
+                              if (isLemuel) {
+                                toast.info("O barbeiro Lemuel está com todos os horários bloqueados no momento.");
+                                return;
+                              }
+                              setBarberId(b.id);
+                              setStep(1);
+                            }}
+                            className={cn(
+                              "flex items-center gap-3 sm:gap-4 rounded-xl border border-border bg-card p-3.5 sm:p-4 text-left transition-all hover:border-foreground/40 hover:bg-accent/60 w-full min-w-0",
+                              isLemuel && "opacity-60 cursor-not-allowed hover:border-border hover:bg-card",
+                              barberId === b.id && "border-foreground bg-accent/80 ring-1 ring-foreground",
+                            )}
+                          >
+                            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-secondary font-display text-lg font-bold">
+                              {b.name.charAt(0)}
                             </span>
-                            <span className="block text-xs text-muted-foreground leading-relaxed whitespace-normal break-words line-clamp-2 mt-0.5">
-                              {b.bio}
+                            <span className="flex-1 min-w-0 overflow-hidden">
+                              <span className="flex items-center gap-2">
+                                <span className="block font-display text-sm sm:text-base font-semibold text-foreground truncate">
+                                  {b.name}
+                                </span>
+                                {isLemuel && (
+                                  <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold text-red-400 border border-red-500/20">
+                                    Horários Bloqueados
+                                  </span>
+                                )}
+                              </span>
+                              <span className="block text-xs text-muted-foreground leading-relaxed whitespace-normal break-words line-clamp-2 mt-0.5">
+                                {isLemuel ? "Agenda bloqueada no momento." : b.bio}
+                              </span>
                             </span>
-                          </span>
-                          {barberId === b.id && (
-                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
-                              <Check className="h-3.5 w-3.5" />
-                            </span>
-                          )}
-                        </button>
-                      ))}
+                            {barberId === b.id && (
+                              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
+                                <Check className="h-3.5 w-3.5" />
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                 </div>
               )}
 

@@ -1452,6 +1452,11 @@ function AgendamentosTab({
   const selectedDayHours = businessHours?.find((h) => h.weekday === selectedWeekday);
   const isNormallyClosed = !selectedDayHours || Boolean(selectedDayHours.closed);
 
+  const isLemuel =
+    barber?.name?.toLowerCase().includes("lemuel") ||
+    barber?.name?.toLowerCase().includes("lemoel") ||
+    barber?.id === "2835dcee-ce42-454c-89d4-2473f6fc421e";
+
   // For selected day — build time slots starting from 06:00 AM up to 00:00 (midnight)
   const selectedDaySlots = (() => {
     if (!selectedDay) return [];
@@ -1501,6 +1506,10 @@ function AgendamentosTab({
   const isDayOpen = !isNormallyClosed || manuallyOpenedDays.has(selectedDayKey) || dayUnblockedSlots.length > 0 || dayAppointments.length > 0;
 
   const handleOpenDay = (key: string) => {
+    if (isLemuel) {
+      toast.error("Os horários do barbeiro Lemuel estão bloqueados no momento.");
+      return;
+    }
     setManuallyOpenedDays((prev) => new Set(prev).add(key));
     toast.success("Atendimento aberto para este dia! Os horários iniciam bloqueados de momento; libere os horários desejados abaixo.");
   };
@@ -1519,6 +1528,10 @@ function AgendamentosTab({
   };
 
   const handleUnlockCommercial = async () => {
+    if (isLemuel) {
+      toast.error("Os horários do barbeiro Lemuel estão bloqueados no momento.");
+      return;
+    }
     if (!selectedDay) return;
     const commercialSlots = selectedDaySlots.filter((s) => {
       const h = Number(s.time.split(":")[0]);
@@ -1534,8 +1547,7 @@ function AgendamentosTab({
       );
       const hasAppt = dayAppointments.some((a) => {
         const aStart = parseISO(a.starts_at);
-        const aEnd = parseISO(a.ends_at);
-        return slotDate >= aStart && slotDate < aEnd;
+        return aStart >= slotDate && aStart < slotEnd;
       });
       if (!isAlreadyUnblocked && !hasAppt) {
         slotsToInsert.push({
@@ -1554,6 +1566,10 @@ function AgendamentosTab({
   };
 
   const handleUnlockAll = async () => {
+    if (isLemuel) {
+      toast.error("Os horários do barbeiro Lemuel estão bloqueados no momento.");
+      return;
+    }
     if (!selectedDay) return;
     const slotsToInsert: { startsAt: string; endsAt: string; reason: string }[] = [];
     for (const s of selectedDaySlots) {
@@ -1564,8 +1580,7 @@ function AgendamentosTab({
       );
       const hasAppt = dayAppointments.some((a) => {
         const aStart = parseISO(a.starts_at);
-        const aEnd = parseISO(a.ends_at);
-        return slotDate >= aStart && slotDate < aEnd;
+        return aStart >= slotDate && aStart < slotEnd;
       });
       if (!isAlreadyUnblocked && !hasAppt) {
         slotsToInsert.push({
@@ -1595,6 +1610,9 @@ function AgendamentosTab({
   // Day dot indicators
   function getDayInfo(day: Date) {
     const booked = appointments.filter((a) => isSameDay(parseISO(a.starts_at), day));
+    if (isLemuel) {
+      return { booked: booked.length, blocked: selectedDaySlots.length - booked.length, unblocked: 0 };
+    }
     const actualBlocked = blockedSlots.filter(
       (b) => b.reason !== "desbloqueado" && isSameDay(parseISO(b.starts_at), day)
     );
@@ -1798,37 +1816,46 @@ function AgendamentosTab({
                   )}
 
                   {/* Ações rápidas */}
-                  <div className="mb-3 flex flex-wrap items-center gap-1.5">
-                    <button
-                      onClick={handleUnlockCommercial}
-                      disabled={batchBlockMutation.isPending}
-                      className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/80 px-2.5 py-1 text-[11px] font-medium text-zinc-300 transition-all hover:border-[#39ff14]/40 hover:text-[#39ff14] disabled:opacity-50"
-                    >
-                      <Clock className="h-3 w-3" />
-                      Liberar Comercial (09h - 18h)
-                    </button>
-                    <button
-                      onClick={handleUnlockAll}
-                      disabled={batchBlockMutation.isPending}
-                      className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/80 px-2.5 py-1 text-[11px] font-medium text-zinc-300 transition-all hover:border-emerald-500/40 hover:text-emerald-400 disabled:opacity-50"
-                    >
-                      <Unlock className="h-3 w-3" />
-                      Liberar Todos
-                    </button>
-                    <button
-                      onClick={handleBlockAll}
-                      disabled={batchDeleteMutation.isPending}
-                      className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/80 px-2.5 py-1 text-[11px] font-medium text-zinc-300 transition-all hover:border-red-500/40 hover:text-red-400 disabled:opacity-50"
-                    >
-                      <Lock className="h-3 w-3" />
-                      Bloquear Todos
-                    </button>
-                  </div>
+                  {isLemuel ? (
+                    <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 p-2.5 text-xs text-red-300 flex items-center gap-2">
+                      <Lock className="h-4 w-4 shrink-0 text-red-400" />
+                      <span>Todos os horários de atendimento do barbeiro Lemuel estão bloqueados no momento.</span>
+                    </div>
+                  ) : (
+                    <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                      <button
+                        onClick={handleUnlockCommercial}
+                        disabled={batchBlockMutation.isPending}
+                        className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/80 px-2.5 py-1 text-[11px] font-medium text-zinc-300 transition-all hover:border-[#39ff14]/40 hover:text-[#39ff14] disabled:opacity-50"
+                      >
+                        <Clock className="h-3 w-3" />
+                        Liberar Comercial (09h - 18h)
+                      </button>
+                      <button
+                        onClick={handleUnlockAll}
+                        disabled={batchBlockMutation.isPending}
+                        className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/80 px-2.5 py-1 text-[11px] font-medium text-zinc-300 transition-all hover:border-emerald-500/40 hover:text-emerald-400 disabled:opacity-50"
+                      >
+                        <Unlock className="h-3 w-3" />
+                        Liberar Todos
+                      </button>
+                      <button
+                        onClick={handleBlockAll}
+                        disabled={batchDeleteMutation.isPending}
+                        className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/80 px-2.5 py-1 text-[11px] font-medium text-zinc-300 transition-all hover:border-red-500/40 hover:text-red-400 disabled:opacity-50"
+                      >
+                        <Lock className="h-3 w-3" />
+                        Bloquear Todos
+                      </button>
+                    </div>
+                  )}
 
                   <p className="mb-4 text-[11px] text-zinc-500">
-                    {isNormallyClosed
-                      ? "06:00 – 00:00 • Horários mantidos bloqueados de momento. Desbloqueie os horários que você atenderá."
-                      : "06:00 – 00:00 • Intervalos de 1 em 1 hora"}
+                    {isLemuel
+                      ? "Todos os horários deste profissional estão bloqueados para agendamentos."
+                      : isNormallyClosed
+                        ? "06:00 – 00:00 • Horários mantidos bloqueados de momento. Desbloqueie os horários que você atenderá."
+                        : "06:00 – 00:00 • Intervalos de 1 em 1 hora"}
                   </p>
 
                   <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
@@ -1836,11 +1863,10 @@ function AgendamentosTab({
                       const slotDate = new Date(slot.iso);
                       const slotEnd = new Date(slotDate.getTime() + 60 * 60 * 1000);
 
-                      // Check appointment
+                      // Check appointment: apenas no horário em que o serviço se inicia (duração de 1 hora)
                       const appt = appointments.find((a) => {
                         const aStart = parseISO(a.starts_at);
-                        const aEnd = parseISO(a.ends_at);
-                        return slotDate >= aStart && slotDate < aEnd;
+                        return aStart >= slotDate && aStart < slotEnd;
                       });
 
                       // Check blocked
@@ -1865,6 +1891,27 @@ function AgendamentosTab({
                             </div>
                             <span className="text-[10px] text-zinc-500 truncate max-w-[80px]">
                               {(appt as any).services?.name}
+                            </span>
+                          </div>
+                        );
+                      }
+
+                      // Se for o barbeiro Lemuel, todos os demais horários ficam bloqueados
+                      if (isLemuel) {
+                        return (
+                          <div
+                            key={slot.iso}
+                            className="flex items-center justify-between rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2.5"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Lock className="h-4 w-4 text-red-400 shrink-0" />
+                              <div>
+                                <p className="text-xs font-bold text-red-300">{slot.time}</p>
+                                <p className="text-[10px] text-red-400/70">Bloqueado</p>
+                              </div>
+                            </div>
+                            <span className="text-[10px] text-red-400/80 font-semibold px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/20">
+                              Bloqueado
                             </span>
                           </div>
                         );
@@ -2842,6 +2889,11 @@ function AddAppointmentModal({
       } else {
         const selectedService = services.find((s) => s.id === serviceId);
         duration = selectedService?.duration_min ?? 30;
+      }
+
+      const sObj = services.find((s) => s.id === targetServiceId);
+      if (sObj?.name.toLowerCase().includes("corte") && sObj?.name.toLowerCase().includes("barba")) {
+        duration = 60;
       }
 
       if (!targetServiceId) throw new Error("Serviço não identificado.");
